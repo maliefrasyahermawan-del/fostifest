@@ -1,0 +1,9 @@
+# Temporary guidebook renderings
+/tmp/
+
+# Generated Android artifacts are kept locally or published as releases.
+*.apk
+
+# Flutter generated directories (also ignored in the nested app project)
+**/build/
+**/.dart_tool/
