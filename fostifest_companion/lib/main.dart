@@ -1,19 +1,26 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'inventory_page.dart';
+import 'mock_data.dart';
+import 'laras_operations_page.dart';
+import 'manage_cerdas_page.dart';
+import 'supplier_page.dart';
 
 void main() => runApp(const FostifestApp());
 
-// Palet FOSTIFEST: hijau-putih, bersih, dan mudah dibaca di layar ponsel.
-const _brandYellow = Color(0xFF0B5D3B);
+// Palet LARAS UMKM: hijau-putih, bersih, dan mudah dibaca di layar ponsel.
+const _brandYellow = Color(0xFF14935A);
 const _softYellow = Color(0xFF8FE388);
 const _gold = Color(0xFF35A565);
 const _cream = Color(0xFFEAF7EE);
@@ -21,8 +28,9 @@ const _warmWhite = Color(0xFFFFFFFF);
 const _divider = Color(0xFFDDE9E2);
 const _ink = Color(0xFF123126);
 const _muted = Color(0xFF5F766C);
-const _error = Color(0xFFFF6F76);
-const _deepGold = Color(0xFF063A27);
+// Seluruh aksen antarmuka memakai turunan hijau dan putih.
+const _error = Color(0xFF157347);
+const _deepGold = Color(0xFF0B5D3B);
 
 class BusinessProfile {
   const BusinessProfile({
@@ -90,7 +98,8 @@ class FostifestAccount {
   Future<void> save() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('account_full_name', fullName);
-    await prefs.setString('account_identifier', identifier.trim().toLowerCase());
+    await prefs.setString(
+        'account_identifier', identifier.trim().toLowerCase());
     await prefs.setString('account_password', password);
   }
 }
@@ -132,25 +141,33 @@ class _FostifestAppState extends State<FostifestApp> {
   bool _darkMode = false;
   FostifestAccount? _account;
   int _tab = 0;
-  final List<TransactionItem> _transactions = [
-    TransactionItem(
-        name: 'Batik motif Sekar',
-        amount: 480000,
-        date: DateTime.now(),
-        source: 'Manual'),
-    TransactionItem(
-        name: 'Kemeja linen',
-        amount: 275000,
-        date: DateTime.now().subtract(const Duration(days: 1)),
-        source: 'Scan struk'),
-    TransactionItem(
-        name: 'Tas anyam',
-        amount: 190000,
-        date: DateTime.now().subtract(const Duration(days: 2)),
-        source: 'Tempel chat'),
-  ];
+  int _ledgerInitialTab = 0;
+  final List<TransactionItem> _transactions = [];
+  List<Map<String, dynamic>> _expenses = [], _sales = [];
 
   int get _revenue => _transactions.fold(0, (sum, item) => sum + item.amount);
+  bool _thisMonth(DateTime? date) {
+    final now = DateTime.now();
+    return date != null && date.year == now.year && date.month == now.month;
+  }
+
+  int get _monthlyRevenue => _transactions
+      .where((e) => _thisMonth(e.date))
+      .fold(0, (sum, e) => sum + e.amount);
+  int get _monthlyExpense => _expenses
+      .where((e) => _thisMonth(DateTime.tryParse('${e['createdAt']}')))
+      .fold(0, (sum, e) => sum + (e['amount'] as int));
+  int get _monthlyCost =>
+      _sales.where((e) => _thisMonth(DateTime.tryParse('${e['date']}'))).fold(
+          0,
+          (sum, sale) =>
+              sum +
+              ((sale['items'] as List?) ?? []).fold<int>(
+                  0,
+                  (v, item) =>
+                      v +
+                      ((item['cost'] as int?) ?? 0) *
+                          ((item['quantity'] as int?) ?? 0)));
 
   @override
   void initState() {
@@ -165,9 +182,45 @@ class _FostifestAppState extends State<FostifestApp> {
     final profile = await BusinessProfile.load();
     final account = await FostifestAccount.load();
     final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getString('laras_transactions_v1');
+    final restored = <TransactionItem>[];
+    List<Map<String, dynamic>> readRecords(String key) =>
+        (jsonDecode(prefs.getString(key) ?? '[]') as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+    var expenses = <Map<String, dynamic>>[], sales = <Map<String, dynamic>>[];
+    try {
+      expenses = readRecords('laras_expenses_v1');
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Data laporan tidak dapat dibaca.')));
+    }
+    if (saved != null) {
+      try {
+        for (final value in jsonDecode(saved) as List) {
+          final item = Map<String, dynamic>.from(value as Map);
+          final source = item['source'] as String;
+          restored.add(TransactionItem(
+              name: item['name'] as String,
+              amount: item['amount'] as int,
+              date: DateTime.parse(item['date'] as String),
+              source: source));
+        }
+      } catch (_) {
+        if (mounted)
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Data transaksi tidak dapat dibaca.')));
+      }
+    }
     if (mounted) {
       setState(() {
+        _transactions
+          ..clear()
+          ..addAll(restored);
         _profile = profile;
+        _expenses = expenses;
+        _sales = sales;
         _account = account;
         _darkMode = prefs.getBool('dark_mode') ?? false;
       });
@@ -209,25 +262,117 @@ class _FostifestAppState extends State<FostifestApp> {
   }
 
   Future<void> _saveProfile(BusinessProfile profile) async {
-    await profile.save();
     if (mounted) setState(() => _profile = profile);
+    await profile.save();
   }
 
-  void _addTransaction(TransactionItem item) {
+  Future<void> _addTransaction(TransactionItem item) async {
+    final prefs = await SharedPreferences.getInstance();
+    final updated = [item, ..._transactions];
+    final saved = await prefs.setString(
+        'laras_transactions_v1',
+        jsonEncode(updated
+            .map((e) => {
+                  'name': e.name,
+                  'amount': e.amount,
+                  'date': e.date.toIso8601String(),
+                  'source': e.source
+                })
+            .toList()));
+    if (!mounted) return;
+    if (!saved) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaksi gagal disimpan.')));
+      return;
+    }
     setState(() {
       _transactions.insert(0, item);
       _tab = 1;
     });
   }
 
-  void _openAdd() => setState(() => _tab = 2);
+  void _openAdd() => _openFeature('catat');
+
+  Future<void> _openFeature(String feature) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    switch (feature) {
+      case 'catat':
+        await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
+          builder: (pageContext) => Scaffold(
+            appBar: AppBar(
+              title: const Text('Catat transaksi',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+            body: SafeArea(
+              child: AddTransactionPage(onSave: (item) async {
+                await _addTransaction(item);
+                if (pageContext.mounted) Navigator.of(pageContext).pop();
+              }),
+            ),
+          ),
+        ));
+        return;
+      case 'laporan':
+        setState(() {
+          _ledgerInitialTab = 2;
+          _tab = 1;
+        });
+        return;
+      case 'riwayat':
+        setState(() {
+          _ledgerInitialTab = 0;
+          _tab = 1;
+        });
+        return;
+      case 'supplier':
+        setState(() => _tab = 3);
+        return;
+      case 'legalitas':
+        await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
+          builder: (_) => Scaffold(
+            appBar: AppBar(
+              title: const Text('Legalitas usaha',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+            ),
+            body: const SafeArea(child: LegalitasPage()),
+          ),
+        ));
+        return;
+      case 'profil':
+        setState(() => _tab = 4);
+        return;
+      case 'asisten':
+        _openFosti();
+        return;
+    }
+    Widget? page;
+    switch (feature) {
+      case 'produk':
+        page = const InventoryPage();
+        break;
+      case 'pelanggan':
+        page = const LarasOperationsPage(section: 'pelanggan');
+        break;
+      case 'keuangan':
+      case 'pengeluaran':
+        page = const LarasOperationsPage(section: 'keuangan');
+        break;
+      case 'margin':
+        page = const LarasOperationsPage(section: 'margin');
+        break;
+    }
+    if (page == null) return;
+    await _navigatorKey.currentState
+        ?.push(MaterialPageRoute<void>(builder: (_) => page!));
+    await _loadProfile();
+  }
 
   void _openFosti() {
     _navigatorKey.currentState?.push(MaterialPageRoute<void>(
       builder: (_) => Scaffold(
         appBar: AppBar(
-          title:
-              const Text('Fosti', style: TextStyle(fontWeight: FontWeight.w900)),
+          title: const Text('Laras',
+              style: TextStyle(fontWeight: FontWeight.w900)),
         ),
         body: SafeArea(
           child: FostiPage(
@@ -246,20 +391,27 @@ class _FostifestAppState extends State<FostifestApp> {
           profile: _profile,
           items: _transactions,
           revenue: _revenue,
+          monthlyRevenue: _monthlyRevenue,
+          monthlyProfit: _monthlyRevenue - _monthlyExpense - _monthlyCost,
           transactionCount: _transactions.length,
           onAdd: _openAdd,
-          onInsight: () => setState(() => _tab = 3),
+          onFeature: _openFeature,
+          onInsight: () => _openFeature('legalitas'),
           onProfile: () => setState(() => _tab = 4)),
-      LedgerPage(profile: _profile, items: _transactions, onAdd: _openAdd),
-      AddTransactionPage(onSave: _addTransaction),
-      EligibilityPage(
+      LedgerPage(
+          key: ValueKey('ledger-$_ledgerInitialTab'),
+          initialTab: _ledgerInitialTab,
           profile: _profile,
-          revenue: _revenue,
-          transactionCount: _transactions.length,
+          items: _transactions,
+          expenses: _expenses,
+          sales: _sales,
           onAdd: _openAdd),
+      ManageCerdasPage(onOpen: _openFeature),
+      const SupplierPage(),
       ProfilePage(
           profile: _profile,
           onSave: _saveProfile,
+          onCashierClosed: _loadProfile,
           darkMode: _darkMode,
           onDarkModeChanged: _setDarkMode,
           onLogout: _logout),
@@ -267,13 +419,41 @@ class _FostifestAppState extends State<FostifestApp> {
 
     return MaterialApp(
       navigatorKey: _navigatorKey,
-      title: 'FOSTIFEST',
+      builder: (context, child) {
+        if (!kIsWeb || child == null) return child ?? const SizedBox.shrink();
+        return LayoutBuilder(builder: (context, constraints) {
+          final compact = constraints.maxWidth < 500;
+          final width = compact
+              ? constraints.maxWidth
+              : math.min(414.0, constraints.maxWidth - 32);
+          final height = compact
+              ? constraints.maxHeight
+              : math.min(852.0, constraints.maxHeight - 32);
+          return ColoredBox(
+            color: const Color(0xFFE9F1EC),
+            child: Center(
+                child: SizedBox(
+                    width: width,
+                    height: height,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(compact ? 0 : 24),
+                      child: MediaQuery(
+                          data: MediaQuery.of(context).copyWith(
+                              size: Size(width, height),
+                              padding: EdgeInsets.zero,
+                              viewPadding: EdgeInsets.zero),
+                          child: child),
+                    ))),
+          );
+        });
+      },
+      title: 'LARAS UMKM',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: const ColorScheme.light(
           primary: _brandYellow,
-          onPrimary: _ink,
+          onPrimary: Colors.white,
           secondary: _softYellow,
           onSecondary: _ink,
           surface: _warmWhite,
@@ -318,25 +498,25 @@ class _FostifestAppState extends State<FostifestApp> {
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
           primary: _brandYellow,
-          onPrimary: _ink,
+          onPrimary: Colors.white,
           secondary: _softYellow,
-          surface: Color(0xFF202020),
+          surface: Color(0xFF0B2E20),
           onSurface: Colors.white,
           error: _error,
         ),
-        scaffoldBackgroundColor: const Color(0xFF121212),
+        scaffoldBackgroundColor: const Color(0xFF062218),
         cardTheme: CardThemeData(
-          color: const Color(0xFF202020),
+          color: const Color(0xFF0B2E20),
           elevation: 0,
           margin: EdgeInsets.zero,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
-            side: const BorderSide(color: Color(0xFF383838)),
+            side: const BorderSide(color: Color(0xFF1E5A42)),
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: const Color(0xFF202020),
+          fillColor: const Color(0xFF0B2E20),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
         ),
         fontFamily: 'Roboto',
@@ -346,26 +526,32 @@ class _FostifestAppState extends State<FostifestApp> {
           ? const FostifestSplashScreen()
           : !_signedIn
               ? FostifestLoginScreen(
-                  onEnter: () => setState(() => _signedIn = true),
+                  onEnter: () async {
+                    await seedBatikDemoData();
+                    await _loadProfile();
+                    if (mounted) setState(() => _signedIn = true);
+                  },
                   onLogin: _login,
                   onRegister: _register,
                 )
               : Scaffold(
                   appBar: _tab == 2
                       ? AppBar(
-                          title: const Text('Catat Cerdas',
+                          title: const Text('Manage Cerdas',
                               style: TextStyle(fontWeight: FontWeight.w900)),
                         )
                       : null,
+                  drawer:
+                      LarasSidebar(profile: _profile, onFeature: _openFeature),
                   body: SafeArea(top: _tab != 2, child: pages[_tab]),
                   floatingActionButton: _tab == 2
                       ? null
                       : FloatingActionButton.extended(
                           onPressed: _openFosti,
-                          backgroundColor: _ink,
+                          backgroundColor: _brandYellow,
                           foregroundColor: Colors.white,
                           icon: const Icon(Icons.auto_awesome_rounded),
-                          label: const Text('Fosti'),
+                          label: const Text('Laras'),
                         ),
                   bottomNavigationBar: FostifestBottomBar(
                     selectedIndex: _tab,
@@ -381,37 +567,47 @@ class FostifestSplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: _brandYellow,
-        body: SafeArea(
-          child: Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(
-                width: 112,
-                height: 112,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(34),
-                  boxShadow: const [
-                    BoxShadow(
-                        color: Color(0x24000000),
-                        blurRadius: 24,
-                        offset: Offset(0, 12)),
-                  ],
+        body: Container(
+          decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                Color(0xFF1FB36F),
+                Color(0xFF6ED3A3),
+                Color(0xFFDDF7EA)
+              ])),
+          child: SafeArea(
+            child: Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Container(
+                  width: 112,
+                  height: 112,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(34),
+                    boxShadow: const [
+                      BoxShadow(
+                          color: Color(0x24000000),
+                          blurRadius: 24,
+                          offset: Offset(0, 12)),
+                    ],
+                  ),
+                  child: const Icon(Icons.storefront_rounded,
+                      size: 58, color: _ink),
                 ),
-                child:
-                    const Icon(Icons.storefront_rounded, size: 58, color: _ink),
-              ),
-              const SizedBox(height: 24),
-              const Text('FOSTIFEST',
-                  style: TextStyle(
-                      fontSize: 28,
-                      letterSpacing: 3,
-                      fontWeight: FontWeight.w900,
-                      color: _ink)),
-              const SizedBox(height: 8),
-              const Text('Tumbuhkan arah usahamu.',
-                  style: TextStyle(color: _ink, fontSize: 15)),
-            ]),
+                const SizedBox(height: 24),
+                const Text('LARAS UMKM',
+                    style: TextStyle(
+                        fontSize: 28,
+                        letterSpacing: 3,
+                        fontWeight: FontWeight.w900,
+                        color: _ink)),
+                const SizedBox(height: 8),
+                const Text('Tumbuhkan arah usahamu.',
+                    style: TextStyle(color: _ink, fontSize: 15)),
+              ]),
+            ),
           ),
         ),
       );
@@ -478,7 +674,19 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                 height: 236,
                 padding: const EdgeInsets.all(28),
                 decoration: const BoxDecoration(
-                  color: _brandYellow,
+                  gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Color(0xFF1FB36F),
+                        Color(0xFF45C98E),
+                        Color(0xFFBFF0D6)
+                      ],
+                      stops: [
+                        0,
+                        .65,
+                        1
+                      ]),
                   borderRadius:
                       BorderRadius.vertical(bottom: Radius.circular(34)),
                 ),
@@ -496,10 +704,11 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                             color: _ink, size: 34),
                       ),
                       const SizedBox(height: 14),
-                      const Text('FOSTIFEST',
+                      const Text('LARAS UMKM',
                           style: TextStyle(
                               fontSize: 25,
                               fontWeight: FontWeight.w900,
+                              color: _ink,
                               letterSpacing: 2)),
                       const SizedBox(height: 4),
                       const Text('Masuk untuk melihat arah usahamu.',
@@ -514,17 +723,17 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                       const Text('Email atau nomor WhatsApp',
                           style: TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
-                       TextField(
-                           controller: _identifier,
-                           keyboardType: TextInputType.emailAddress,
-                          decoration:
-                               const InputDecoration(hintText: 'contoh@usaha.id')),
+                      TextField(
+                          controller: _identifier,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                              hintText: 'contoh@usaha.id')),
                       const SizedBox(height: 18),
                       const Text('Kata sandi',
                           style: TextStyle(fontWeight: FontWeight.w800)),
                       const SizedBox(height: 8),
                       TextField(
-                         controller: _password,
+                        controller: _password,
                         obscureText: _obscure,
                         decoration: InputDecoration(
                           hintText: 'Minimal 6 karakter',
@@ -546,21 +755,22 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                       ),
                       const SizedBox(height: 8),
                       FilledButton(
-                         onPressed: _submitting ? null : _submit,
+                        onPressed: _submitting ? null : _submit,
                         style: FilledButton.styleFrom(
                           minimumSize: const Size.fromHeight(54),
                           backgroundColor: _brandYellow,
-                          foregroundColor: _ink,
+                          foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16)),
                         ),
-                         child: Text(_submitting ? 'Memeriksa…' : 'Masuk',
-                             style: const TextStyle(fontWeight: FontWeight.w900)),
+                        child: Text(_submitting ? 'Memeriksa…' : 'Masuk',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.w900)),
                       ),
                       const SizedBox(height: 20),
                       Center(
                           child: TextButton(
-                               onPressed: _openRegistration,
+                              onPressed: _openRegistration,
                               child: const Text('Belum punya akun? Daftar',
                                   style: TextStyle(
                                       color: _ink,
@@ -587,7 +797,7 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                       OutlinedButton.icon(
                         onPressed: widget.onEnter,
                         icon: const Icon(Icons.auto_awesome_rounded),
-                        label: const Text('Masuk ke akun demo FOSTIFEST'),
+                        label: const Text('Masuk ke akun demo LARAS UMKM'),
                         style: OutlinedButton.styleFrom(
                             minimumSize: const Size.fromHeight(52),
                             foregroundColor: _ink,
@@ -611,7 +821,8 @@ class FostifestRegistrationScreen extends StatefulWidget {
       _FostifestRegistrationScreenState();
 }
 
-class _FostifestRegistrationScreenState extends State<FostifestRegistrationScreen> {
+class _FostifestRegistrationScreenState
+    extends State<FostifestRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
   final _identifier = TextEditingController();
@@ -647,8 +858,9 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          backgroundColor: _brandYellow,
-          title: const Text('Daftar akun FOSTIFEST',
+          backgroundColor: const Color(0xFF8FDDB3),
+          foregroundColor: _ink,
+          title: const Text('Daftar akun LARAS UMKM',
               style: TextStyle(fontWeight: FontWeight.w900)),
         ),
         body: SafeArea(
@@ -662,7 +874,7 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                         TextStyle(fontSize: 25, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
                 const Text(
-                    'Buat akun untuk menyimpan akses FOSTIFEST di perangkat ini.',
+                    'Buat akun untuk menyimpan akses LARAS UMKM di perangkat ini.',
                     style: TextStyle(color: _muted, height: 1.4)),
                 const SizedBox(height: 24),
                 const Text('Nama lengkap',
@@ -673,7 +885,8 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                   controller: _name,
                   textCapitalization: TextCapitalization.words,
                   validator: _required,
-                  decoration: const InputDecoration(hintText: 'Nama sesuai KTP'),
+                  decoration:
+                      const InputDecoration(hintText: 'Nama sesuai KTP'),
                 ),
                 const SizedBox(height: 18),
                 const Text('Nomor WhatsApp atau email',
@@ -684,8 +897,8 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                   controller: _identifier,
                   keyboardType: TextInputType.emailAddress,
                   validator: _required,
-                  decoration:
-                      const InputDecoration(hintText: '08xx atau nama@usaha.id'),
+                  decoration: const InputDecoration(
+                      hintText: '08xx atau nama@usaha.id'),
                 ),
                 const SizedBox(height: 18),
                 const Text('Kata sandi',
@@ -719,9 +932,8 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                   key: const Key('register_confirmation'),
                   controller: _confirmation,
                   obscureText: _obscure,
-                  validator: (value) => value != _password.text
-                      ? 'Kata sandi belum sama.'
-                      : null,
+                  validator: (value) =>
+                      value != _password.text ? 'Kata sandi belum sama.' : null,
                   decoration:
                       const InputDecoration(hintText: 'Ketik ulang kata sandi'),
                 ),
@@ -736,7 +948,8 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                   child: const Row(children: [
                     CircleAvatar(
                         backgroundColor: _brandYellow,
-                        child: Icon(Icons.storefront_rounded, color: _ink)),
+                        child: Icon(Icons.storefront_rounded,
+                            color: Colors.white)),
                     SizedBox(width: 12),
                     Expanded(
                         child: Column(
@@ -757,7 +970,7 @@ class _FostifestRegistrationScreenState extends State<FostifestRegistrationScree
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(54),
                     backgroundColor: _brandYellow,
-                    foregroundColor: _ink,
+                    foregroundColor: Colors.white,
                   ),
                   child: Text(_submitting ? 'Menyimpan…' : 'Daftar & masuk',
                       style: const TextStyle(fontWeight: FontWeight.w900)),
@@ -807,9 +1020,9 @@ class FostifestBottomBar extends StatelessWidget {
               _CenterNavItem(
                   selected: selectedIndex == 2, onPressed: () => onSelected(2)),
               _NavItem(
-                  icon: Icons.insights_outlined,
-                  activeIcon: Icons.insights_rounded,
-                  label: 'Kelayakan',
+                  icon: Icons.local_shipping_outlined,
+                  activeIcon: Icons.local_shipping_rounded,
+                  label: 'Supplier',
                   index: 3,
                   selected: selectedIndex,
                   onSelected: onSelected),
@@ -885,36 +1098,12 @@ class _CenterNavItem extends StatelessWidget {
                           blurRadius: 12,
                           offset: Offset(0, 5))
                     ]),
-                child: Stack(
-                  key: const Key('smart_record_icon'),
-                  alignment: Alignment.center,
-                  children: [
-                    const Icon(Icons.receipt_long_rounded,
-                        color: _ink, size: 31),
-                    Positioned(
-                      right: 7,
-                      bottom: 7,
-                      child: Container(
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: _brandYellow,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: _ink, width: 2),
-                        ),
-                        child: const Text('\$',
-                            style: TextStyle(
-                                color: _ink,
-                                fontSize: 15,
-                                height: 1,
-                                fontWeight: FontWeight.w900)),
-                      ),
-                    ),
-                  ],
-                )),
+                child: const Icon(Icons.dashboard_customize_rounded,
+                    key: Key('smart_record_icon'),
+                    color: Colors.white,
+                    size: 30)),
             const SizedBox(height: 3),
-            Text('Catat Cerdas',
+            Text('Manage Cerdas',
                 maxLines: 1,
                 softWrap: false,
                 overflow: TextOverflow.ellipsis,
@@ -940,6 +1129,12 @@ class MobileHeader extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
         height: 56,
         child: Row(children: [
+          IconButton(
+              key: const Key('open_sidebar'),
+              tooltip: 'Menu',
+              onPressed: () => Scaffold.maybeOf(context)?.openDrawer(),
+              icon: const Icon(Icons.menu_rounded, color: _ink)),
+          const SizedBox(width: 2),
           InkWell(
             onTap: onOpenProfile,
             borderRadius: BorderRadius.circular(20),
@@ -961,7 +1156,7 @@ class MobileHeader extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                const Text('FOSTIFEST',
+                const Text('LARAS UMKM',
                     key: Key('home_brand'),
                     style: TextStyle(
                         letterSpacing: 1.5,
@@ -976,115 +1171,461 @@ class MobileHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
             ),
             child: IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.notifications_none_rounded)),
+                tooltip: 'Profil usaha',
+                onPressed: onOpenProfile,
+                icon: const Icon(Icons.account_circle_outlined)),
           ),
         ]),
       );
 }
 
-class _HeroCurveClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) => Path()
-    ..lineTo(0, size.height - 34)
-    ..quadraticBezierTo(
-        size.width / 2, size.height + 24, size.width, size.height - 34)
-    ..lineTo(size.width, 0)
-    ..close();
+/// Sidebar fitur: semua fitur LARAS UMKM tersimpan di sini.
+class LarasSidebar extends StatelessWidget {
+  const LarasSidebar(
+      {super.key, required this.profile, required this.onFeature});
+  final BusinessProfile profile;
+  final ValueChanged<String> onFeature;
+
+  static const _sections = <(String, List<(String, String, IconData)>)>[
+    (
+      'Kelola usaha',
+      [
+        ('produk', 'Produk dan stok', Icons.inventory_2_outlined),
+        ('pelanggan', 'Pelanggan', Icons.groups_2_outlined),
+        ('keuangan', 'Keuangan', Icons.account_balance_wallet_outlined),
+      ]
+    ),
+    (
+      'Manajemen usaha',
+      [
+        ('margin', 'Harga & margin', Icons.price_change_outlined),
+        ('laporan', 'Laporan & analitik', Icons.bar_chart_rounded),
+        ('supplier', 'Supplier', Icons.local_shipping_outlined),
+      ]
+    ),
+  ];
 
   @override
-  bool shouldReclip(covariant CustomClipper<Path> oldClipper) => false;
+  Widget build(BuildContext context) => Drawer(
+        key: const Key('laras_sidebar'),
+        width: 300,
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(right: Radius.circular(24))),
+        child: SafeArea(
+          child: Column(children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF1FB36F),
+                      Color(0xFF45C98E),
+                      Color(0xFFBFF0D6)
+                    ],
+                    stops: [
+                      0,
+                      .65,
+                      1
+                    ]),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14)),
+                  child:
+                      Image(image: _businessPhoto(profile), fit: BoxFit.cover),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(profile.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              color: _ink)),
+                      Text(profile.location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11.5, color: _ink)),
+                    ])),
+                IconButton(
+                    key: const Key('close_sidebar'),
+                    tooltip: 'Tutup menu',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, color: _ink)),
+              ]),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(10, 4, 10, 16),
+                children: [
+                  for (final section in _sections) ...[
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 14, 12, 6),
+                      child: Text(section.$1.toUpperCase(),
+                          style: const TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1,
+                              fontWeight: FontWeight.w900,
+                              color: _muted)),
+                    ),
+                    for (final item in section.$2)
+                      ListTile(
+                        key: Key('sidebar_${item.$1}'),
+                        dense: true,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        leading: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                              color: _cream,
+                              borderRadius: BorderRadius.circular(11)),
+                          child: Icon(item.$3, size: 20, color: _deepGold),
+                        ),
+                        title: Text(item.$2,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, color: _ink)),
+                        trailing: const Icon(Icons.chevron_right_rounded,
+                            color: _muted),
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          onFeature(item.$1);
+                        },
+                      ),
+                  ],
+                ],
+              ),
+            ),
+          ]),
+        ),
+      );
 }
 
 class _HomeHero extends StatelessWidget {
-  const _HomeHero({
-    required this.profile,
-    required this.revenue,
-    required this.transactionCount,
-    required this.onProfile,
-  });
-
+  const _HomeHero(
+      {required this.profile,
+      required this.onProfile,
+      required this.onAdd,
+      required this.onFeature});
   final BusinessProfile profile;
-  final int revenue;
-  final int transactionCount;
-  final VoidCallback onProfile;
+  final VoidCallback onProfile, onAdd;
+  final ValueChanged<String> onFeature;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-        height: 314,
-        child: Stack(children: [
-          ClipPath(
-            clipper: _HeroCurveClipper(),
-            child: Container(height: 266, color: _brandYellow),
-          ),
-          Positioned(
-            top: 14,
-            left: 20,
-            right: 20,
-            child: MobileHeader(profile: profile, onOpenProfile: onProfile),
-          ),
-          Positioned(
-            top: 104,
-            left: 20,
-            right: 20,
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Halo, ${profile.name} 👋',
-                  key: const Key('home_greeting'),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w900, color: _ink)),
-              const SizedBox(height: 5),
-              const Text('Ringkasan hari ini dari pembukuan FOSTIFEST.',
-                  key: Key('home_subtitle'), style: TextStyle(color: _ink)),
-            ]),
-          ),
-          Positioned(
-            left: 20,
-            right: 20,
-            bottom: 2,
-            child: Container(
-              key: const Key('home_summary_card'),
-              height: 112,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          MobileHeader(profile: profile, onOpenProfile: onProfile),
+          const SizedBox(height: 18),
+          _FeatureSearch(onSelect: onFeature),
+          const SizedBox(height: 16),
+          Container(
+            key: const Key('home_summary_card'),
+            height: 190,
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF1FB36F),
+                      Color(0xFF45C98E),
+                      Color(0xFFBFF0D6)
+                    ],
+                    stops: [
+                      0,
+                      .65,
+                      1
+                    ]),
+                borderRadius: BorderRadius.circular(22),
                 boxShadow: const [
                   BoxShadow(
-                      color: Color(0x1A252525),
-                      blurRadius: 20,
-                      offset: Offset(0, 9))
-                ],
-              ),
-              child: Row(children: [
-                const Icon(Icons.storefront_rounded, size: 34, color: _ink),
-                const SizedBox(width: 14),
-                Expanded(
-                    child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Usaha bulan ini',
-                        style: TextStyle(fontSize: 12, color: _muted)),
-                    Text(formatRupiah(revenue),
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: _ink)),
-                    Text('$transactionCount transaksi tercatat',
-                        style: const TextStyle(fontSize: 11, color: _muted)),
-                  ],
-                )),
-                const Icon(Icons.trending_up_rounded, color: _deepGold),
-              ]),
-            ),
+                      color: Color(0x2214935A),
+                      blurRadius: 18,
+                      offset: Offset(0, 8))
+                ]),
+            child: Stack(fit: StackFit.expand, children: [
+              Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  width: 200,
+                  child: ShaderMask(
+                      blendMode: BlendMode.dstIn,
+                      shaderCallback: (rect) => const LinearGradient(
+                              begin: Alignment.centerLeft,
+                              end: Alignment.centerRight,
+                              colors: [
+                                Color(0x00FFFFFF),
+                                Color(0xB3FFFFFF),
+                                Color(0xFFFFFFFF)
+                              ],
+                              stops: [
+                                0,
+                                .45,
+                                1
+                              ]).createShader(rect),
+                      child: ColorFiltered(
+                          colorFilter: const ColorFilter.mode(
+                              Color(0x331FB36F), BlendMode.srcATop),
+                          child: Image.asset('assets/images/hero-store.jpg',
+                              fit: BoxFit.cover,
+                              alignment: const Alignment(.45, 0))))),
+              Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                          width: 210,
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('LARAS UMKM',
+                                    style: TextStyle(
+                                        color: Color(0xFF0C6B40),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 1)),
+                                const SizedBox(height: 6),
+                                const SizedBox(
+                                    width: 210,
+                                    child: Text(
+                                        'Usaha lebih rapi,\nlangkah lebih pasti.',
+                                        style: TextStyle(
+                                            color: _ink,
+                                            fontSize: 20,
+                                            height: 1.18,
+                                            fontWeight: FontWeight.w900))),
+                                const SizedBox(height: 7),
+                                const SizedBox(
+                                    width: 210,
+                                    child: Text(
+                                        'Catat transaksi dan pantau usahamu dalam satu tempat.',
+                                        style: TextStyle(
+                                            color: Color(0xFF1F4D39),
+                                            fontSize: 11.5,
+                                            height: 1.3))),
+                                const SizedBox(height: 12),
+                                SizedBox(
+                                    height: 34,
+                                    child: FilledButton.icon(
+                                        onPressed: onAdd,
+                                        style: FilledButton.styleFrom(
+                                            backgroundColor: _brandYellow,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            textStyle: const TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w800)),
+                                        icon: const Icon(Icons.add_rounded,
+                                            size: 16),
+                                        label: const Text('Catat transaksi'))),
+                              ])))),
+            ]),
           ),
         ]),
       );
+}
+
+class _FeatureSearch extends StatefulWidget {
+  const _FeatureSearch({required this.onSelect});
+  final ValueChanged<String> onSelect;
+  @override
+  State<_FeatureSearch> createState() => _FeatureSearchState();
+}
+
+class _FeatureSearchState extends State<_FeatureSearch> {
+  final controller = TextEditingController();
+  static const features = <({
+    String id,
+    String title,
+    String subtitle,
+    String words,
+    IconData icon
+  })>[
+    (
+      id: 'margin',
+      title: 'Harga & margin produk',
+      subtitle: 'Cek margin tiap produk dan atur harga jual',
+      words: 'harga margin laba untung modal hpp atur harga produk',
+      icon: Icons.price_change_outlined
+    ),
+    (
+      id: 'catat',
+      title: 'Catat transaksi',
+      subtitle: 'Input manual, chat, dan foto catatan',
+      words: 'pemasukan tambah transaksi ocr foto catatan chat',
+      icon: Icons.edit_note_rounded
+    ),
+    (
+      id: 'supplier',
+      title: 'Supplier',
+      subtitle: 'Pemasok bahan baku, kontak, dan harga bahan',
+      words: 'supplier pemasok bahan baku mori malam pewarna harga beli kontak',
+      icon: Icons.local_shipping_outlined
+    ),
+    (
+      id: 'produk',
+      title: 'Produk dan stok',
+      subtitle: 'Kelola katalog dan persediaan',
+      words: 'barang stok inventaris kategori sku tambah produk',
+      icon: Icons.inventory_2_outlined
+    ),
+    (
+      id: 'pelanggan',
+      title: 'Pelanggan',
+      subtitle: 'Kontak dan catatan pelanggan',
+      words: 'pelanggan customer kontak catatan',
+      icon: Icons.people_outline_rounded
+    ),
+    (
+      id: 'pengeluaran',
+      title: 'Pengeluaran',
+      subtitle: 'Catat biaya usaha',
+      words: 'biaya beban expense keluar operasional',
+      icon: Icons.account_balance_wallet_outlined
+    ),
+    (
+      id: 'laporan',
+      title: 'Laporan keuangan',
+      subtitle: 'Laba rugi, omzet, dan PDF',
+      words: 'laporan laba rugi pendapatan pengeluaran omzet pdf cetak',
+      icon: Icons.bar_chart_rounded
+    ),
+    (
+      id: 'riwayat',
+      title: 'Riwayat transaksi',
+      subtitle: 'Lihat catatan transaksi usaha',
+      words: 'transaksi riwayat kalender catatan pembukuan',
+      icon: Icons.receipt_long_outlined
+    ),
+    (
+      id: 'legalitas',
+      title: 'Legalitas usaha',
+      subtitle: 'Catat status dokumen usaha',
+      words: 'legalitas nib pirt merek halal dokumen izin usaha',
+      icon: Icons.verified_user_outlined
+    ),
+    (
+      id: 'profil',
+      title: 'Profil usaha',
+      subtitle: 'Identitas dan pengaturan usaha',
+      words: 'profil pengaturan nama usaha alamat',
+      icon: Icons.storefront_outlined
+    ),
+    (
+      id: 'asisten',
+      title: 'Asisten Laras',
+      subtitle: 'Tanyakan hal tentang usahamu',
+      words: 'chat tanya bantuan asisten laras',
+      icon: Icons.auto_awesome_outlined
+    ),
+  ];
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = controller.text.trim().toLowerCase();
+    final terms = query.split(RegExp(r'\s+')).where((e) => e.isNotEmpty);
+    final matches = features.where((f) {
+      final text = '${f.title} ${f.subtitle} ${f.words}'.toLowerCase();
+      return terms.every(text.contains);
+    }).toList();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      TextField(
+        key: const Key('feature_search'),
+        controller: controller,
+        onChanged: (_) => setState(() {}),
+        textInputAction: TextInputAction.search,
+        onSubmitted: (_) {
+          if (query.isNotEmpty && matches.isNotEmpty) {
+            final id = matches.first.id;
+            controller.clear();
+            setState(() {});
+            widget.onSelect(id);
+          }
+        },
+        decoration: InputDecoration(
+            hintText: 'Cari fitur atau layanan usaha',
+            hintStyle: const TextStyle(fontSize: 13, color: _muted),
+            prefixIcon: const Icon(Icons.search_rounded, color: _muted),
+            suffixIcon: query.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Hapus pencarian',
+                    onPressed: () => setState(controller.clear),
+                    icon: const Icon(Icons.close_rounded, size: 20)),
+            filled: true,
+            fillColor: const Color(0xFFF3F6F4),
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+                borderSide: BorderSide.none)),
+      ),
+      if (query.isNotEmpty) ...[
+        const SizedBox(height: 8),
+        Container(
+            key: const Key('feature_search_results'),
+            decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _divider)),
+            child: matches.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Fitur tidak ditemukan. Coba kata lain.',
+                        style: TextStyle(color: _muted)))
+                : Material(
+                    color: Colors.transparent,
+                    child: Column(
+                        children: matches
+                            .map((f) => ListTile(
+                                dense: true,
+                                leading: Icon(f.icon, color: _brandYellow),
+                                title: Text(f.title,
+                                    style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700)),
+                                subtitle: Text(f.subtitle,
+                                    style: const TextStyle(
+                                        fontSize: 11, color: _muted)),
+                                trailing: const Icon(
+                                    Icons.chevron_right_rounded,
+                                    size: 20),
+                                onTap: () {
+                                  controller.clear();
+                                  setState(() {});
+                                  widget.onSelect(f.id);
+                                }))
+                            .toList()))),
+      ],
+    ]);
+  }
 }
 
 class HomePage extends StatefulWidget {
@@ -1093,15 +1634,20 @@ class HomePage extends StatefulWidget {
       required this.profile,
       required this.items,
       required this.revenue,
+      required this.monthlyRevenue,
+      required this.monthlyProfit,
       required this.transactionCount,
       required this.onAdd,
+      required this.onFeature,
       required this.onInsight,
       required this.onProfile});
   final int revenue;
+  final int monthlyRevenue, monthlyProfit;
   final BusinessProfile profile;
   final List<TransactionItem> items;
   final int transactionCount;
   final VoidCallback onAdd;
+  final ValueChanged<String> onFeature;
   final VoidCallback onInsight;
   final VoidCallback onProfile;
 
@@ -1133,9 +1679,9 @@ class _HomePageState extends State<HomePage> {
         children: [
           _HomeHero(
               profile: widget.profile,
-              revenue: widget.revenue,
-              transactionCount: widget.transactionCount,
-              onProfile: widget.onProfile),
+              onProfile: widget.onProfile,
+              onAdd: widget.onAdd,
+              onFeature: widget.onFeature),
           const SizedBox(height: 14),
           SizedBox(
             height: 132,
@@ -1145,20 +1691,14 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   MetricCard(
                       label: 'OMZET BULAN INI',
-                      value: formatRupiah(widget.revenue),
+                      value: formatRupiah(widget.monthlyRevenue),
                       note: '${widget.transactionCount} transaksi',
                       accent: _deepGold),
                   const SizedBox(width: 12),
-                  const MetricCard(
-                      label: 'LABA BERSIH',
-                      value: 'Rp 635.000',
-                      note: 'Naik 12% dari bulan lalu',
-                      accent: _deepGold),
-                  const SizedBox(width: 12),
-                  const MetricCard(
-                      label: 'SKOR KESIAPAN',
-                      value: '72 / 100',
-                      note: 'Naik 5 poin minggu ini',
+                  MetricCard(
+                      label: 'ESTIMASI LABA',
+                      value: formatRupiah(widget.monthlyProfit),
+                      note: 'Berdasarkan biaya tercatat',
                       accent: _deepGold),
                 ]),
           ),
@@ -1172,7 +1712,7 @@ class _HomePageState extends State<HomePage> {
                 style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(54),
                     backgroundColor: _brandYellow,
-                    foregroundColor: _ink,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)))),
           ),
@@ -1194,17 +1734,18 @@ class _HomePageState extends State<HomePage> {
                         decoration: BoxDecoration(
                             color: _brandYellow,
                             borderRadius: BorderRadius.circular(15)),
-                        child: const Icon(Icons.insights_rounded, color: _ink)),
+                        child: const Icon(Icons.verified_user_outlined,
+                            color: Colors.white)),
                     const SizedBox(width: 13),
                     const Expanded(
                         child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                          Text('Arah usaha minggu ini',
+                          Text('Legalitas usaha',
                               style: TextStyle(
                                   fontWeight: FontWeight.w900, color: _ink)),
                           SizedBox(height: 3),
-                          Text('Lengkapi NIB untuk menaikkan skor kesiapanmu.',
+                          Text('Catat dokumen usaha yang sudah dimiliki.',
                               style: TextStyle(fontSize: 13, color: _ink)),
                         ])),
                     const Icon(Icons.chevron_right_rounded),
@@ -1213,22 +1754,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          const SectionTitle(title: 'Langkah paling berdampak'),
-          const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: ActionCard(
-                  icon: Icons.verified_user_outlined,
-                  title: 'Lengkapi legalitas usaha',
-                  subtitle: 'NIB dapat menambah 10 poin kesiapan.',
-                  action: 'Mulai')),
-          const SizedBox(height: 10),
-          const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20),
-              child: ActionCard(
-                  icon: Icons.calendar_month_outlined,
-                  title: 'Catat transaksi selama 7 hari',
-                  subtitle: 'Konsistensi membuat insight makin akurat.',
-                  action: 'Lihat')),
           const SectionTitle(title: 'Tren omzet'),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1262,7 +1787,7 @@ class _HomePageState extends State<HomePage> {
                       Text('Kelengkapan legalitas',
                           style: TextStyle(
                               fontWeight: FontWeight.w900, color: _ink)),
-                      Text('2/3 dokumen lengkap',
+                      Text('Lihat daftar dokumen usaha',
                           style: TextStyle(color: _ink, fontSize: 12)),
                     ])),
                 TextButton(
@@ -1400,12 +1925,14 @@ class ProfilePage extends StatelessWidget {
       {super.key,
       required this.profile,
       required this.onSave,
+      required this.onCashierClosed,
       required this.darkMode,
       required this.onDarkModeChanged,
       required this.onLogout});
 
   final BusinessProfile profile;
   final Future<void> Function(BusinessProfile) onSave;
+  final Future<void> Function() onCashierClosed;
   final bool darkMode;
   final ValueChanged<bool> onDarkModeChanged;
   final VoidCallback onLogout;
@@ -1426,6 +1953,7 @@ class ProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListView(
+        key: ValueKey('profile-${profile.name}'),
         padding: const EdgeInsets.fromLTRB(20, 22, 20, 108),
         children: [
           Text('Profil usaha',
@@ -1434,7 +1962,7 @@ class ProfilePage extends StatelessWidget {
                   .headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w900)),
           const SizedBox(height: 6),
-          const Text('Kelola identitas dan kesiapan usahamu.',
+          const Text('Kelola identitas dan informasi usahamu.',
               style: TextStyle(color: _muted)),
           const SizedBox(height: 22),
           Center(
@@ -1488,7 +2016,7 @@ class ProfilePage extends StatelessWidget {
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(52),
               backgroundColor: _brandYellow,
-              foregroundColor: _ink,
+              foregroundColor: Colors.white,
             ),
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Edit profil usaha'),
@@ -1503,12 +2031,16 @@ class ProfilePage extends StatelessWidget {
           const SizedBox(height: 10),
           Card(
               child: Column(children: [
-            const ListTile(
+            ListTile(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const LarasGuidePage())),
                 leading: Icon(Icons.help_outline_rounded),
-                title: Text('Panduan FOSTIFEST'),
+                title: Text('Panduan LARAS UMKM'),
                 trailing: Icon(Icons.chevron_right_rounded)),
             const Divider(color: _divider, height: 1),
-            const ListTile(
+            ListTile(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                    builder: (_) => const PrivacyDataPage())),
                 leading: Icon(Icons.privacy_tip_outlined),
                 title: Text('Privasi dan data usaha'),
                 trailing: Icon(Icons.chevron_right_rounded)),
@@ -1524,7 +2056,7 @@ class ProfilePage extends StatelessWidget {
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
                     builder: (_) => const AboutFostifestPage())),
                 leading: const Icon(Icons.info_outline_rounded),
-                title: const Text('Tentang FOSTIFEST'),
+                title: const Text('Tentang LARAS UMKM'),
                 trailing: const Icon(Icons.chevron_right_rounded)),
             const Divider(color: _divider, height: 1),
             ListTile(
@@ -1539,14 +2071,201 @@ class ProfilePage extends StatelessWidget {
       );
 }
 
+class LarasGuidePage extends StatelessWidget {
+  const LarasGuidePage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Panduan LARAS UMKM')),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: const [
+              Text('Mulai mengelola usaha',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              SizedBox(height: 6),
+              Text(
+                  'Gunakan LARAS untuk memahami arus kas, stok, margin, dan arah usaha.',
+                  style: TextStyle(color: _muted, height: 1.4)),
+              SizedBox(height: 20),
+              _GuideStep(
+                  number: '1',
+                  icon: Icons.edit_note_rounded,
+                  title: 'Catat keuangan',
+                  text:
+                      'Buka Catatan atau Manage Cerdas untuk mencatat pemasukan dan pengeluaran. Gunakan kategori agar laporan lebih mudah dibaca.'),
+              _GuideStep(
+                  number: '2',
+                  icon: Icons.inventory_2_outlined,
+                  title: 'Perbarui produk dan stok',
+                  text:
+                      'Tambahkan produk, harga modal, harga jual, jumlah stok, dan batas stok minimum. Periksa produk yang perlu diisi ulang.'),
+              _GuideStep(
+                  number: '3',
+                  icon: Icons.auto_graph_rounded,
+                  title: 'Evaluasi harga dan margin',
+                  text:
+                      'Di Manage Cerdas, lihat Harga & Margin untuk membandingkan harga jual dengan modal dan menentukan produk yang perlu dievaluasi.'),
+              _GuideStep(
+                  number: '4',
+                  icon: Icons.bar_chart_rounded,
+                  title: 'Baca laporan usaha',
+                  text:
+                      'Buka Catatan untuk melihat ringkasan pemasukan, pengeluaran, laba-rugi, dan laporan periode usaha.'),
+              _GuideStep(
+                  number: '5',
+                  icon: Icons.verified_user_outlined,
+                  title: 'Lengkapi legalitas',
+                  text:
+                      'Catat status NIB, merek/P-IRT, serta sertifikasi halal sebagai pengingat dokumen usaha.'),
+              SizedBox(height: 12),
+              Card(
+                  color: _cream,
+                  child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                          'Tips: catat transaksi pada hari yang sama supaya ringkasan usaha tetap akurat.',
+                          style: TextStyle(height: 1.4, color: _ink)))),
+            ],
+          ),
+        ),
+      );
+}
+
+class _GuideStep extends StatelessWidget {
+  const _GuideStep(
+      {required this.number,
+      required this.icon,
+      required this.title,
+      required this.text});
+  final String number, title, text;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              CircleAvatar(
+                  backgroundColor: _brandYellow,
+                  foregroundColor: Colors.white,
+                  child: Text(number,
+                      style: const TextStyle(fontWeight: FontWeight.w900))),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                    Row(children: [
+                      Icon(icon, size: 19, color: _deepGold),
+                      const SizedBox(width: 7),
+                      Expanded(
+                          child: Text(title,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w900)))
+                    ]),
+                    const SizedBox(height: 5),
+                    Text(text,
+                        style: const TextStyle(
+                            fontSize: 13, height: 1.4, color: _muted)),
+                  ])),
+            ]),
+          ),
+        ),
+      );
+}
+
+class PrivacyDataPage extends StatelessWidget {
+  const PrivacyDataPage({super.key});
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Privasi dan data usaha')),
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.all(20),
+            children: const [
+              Text('Data usaha tetap milikmu',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              SizedBox(height: 6),
+              Text(
+                  'LARAS membantu mengelola catatan usaha tanpa memproses pembayaran atau mengakses rekening bank.',
+                  style: TextStyle(color: _muted, height: 1.4)),
+              SizedBox(height: 20),
+              _PrivacyPoint(
+                  icon: Icons.phone_android_outlined,
+                  title: 'Penyimpanan lokal',
+                  text:
+                      'Profil usaha, produk, pelanggan, transaksi, dan legalitas disimpan pada perangkat atau browser yang sedang digunakan.'),
+              _PrivacyPoint(
+                  icon: Icons.cloud_off_outlined,
+                  title: 'Belum ada sinkronisasi server',
+                  text:
+                      'Versi ini belum mengirim data usaha ke server. Jika browser dibersihkan atau perangkat hilang, data lokal dapat ikut hilang.'),
+              _PrivacyPoint(
+                  icon: Icons.account_balance_wallet_outlined,
+                  title: 'Bukan layanan pembayaran',
+                  text:
+                      'LARAS tidak membuat QRIS, payment link, rekening virtual, atau verifikasi transfer otomatis.'),
+              _PrivacyPoint(
+                  icon: Icons.photo_outlined,
+                  title: 'Foto catatan',
+                  text:
+                      'Foto yang dipilih untuk pembacaan teks dipakai untuk membantu mengisi catatan transaksi. Periksa hasilnya sebelum menyimpan.'),
+              _PrivacyPoint(
+                  icon: Icons.lock_outline_rounded,
+                  title: 'Saran keamanan',
+                  text:
+                      'Gunakan kunci layar perangkat dan jangan membagikan akses browser atau perangkat kepada pihak yang tidak dipercaya.'),
+              SizedBox(height: 10),
+              Card(
+                  color: _cream,
+                  child: Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                          'Jangan menyimpan kata sandi, PIN, nomor rekening, atau data sensitif lain di catatan transaksi.',
+                          style: TextStyle(color: _ink, height: 1.4)))),
+            ],
+          ),
+        ),
+      );
+}
+
+class _PrivacyPoint extends StatelessWidget {
+  const _PrivacyPoint(
+      {required this.icon, required this.title, required this.text});
+  final IconData icon;
+  final String title, text;
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Card(
+            child: ListTile(
+          leading: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                  color: _cream, borderRadius: BorderRadius.circular(13)),
+              child: Icon(icon, color: _deepGold)),
+          title:
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(text, style: const TextStyle(height: 1.35))),
+        )),
+      );
+}
+
 class AboutFostifestPage extends StatelessWidget {
   const AboutFostifestPage({super.key});
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Tentang FOSTIFEST')),
+        appBar: AppBar(title: const Text('Tentang LARAS UMKM')),
         body: SafeArea(
             child: ListView(padding: const EdgeInsets.all(24), children: const [
-          Text('FOSTIFEST',
+          Text('LARAS UMKM',
               style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
@@ -1557,7 +2276,7 @@ class AboutFostifestPage extends StatelessWidget {
               style: TextStyle(fontStyle: FontStyle.italic, color: _muted)),
           SizedBox(height: 24),
           Text(
-              'FOSTIFEST membantu pelaku UMKM mengubah bukti penjualan, foto struk, dan catatan manual menjadi pembukuan yang terstruktur. Data tersebut dipakai untuk membaca tren usaha, menghitung kesiapan, dan menyiapkan dokumen pendukung pembiayaan.',
+              'LARAS UMKM membantu pelaku UMKM mencatat transaksi, memantau penjualan, dan memahami hasil usaha melalui laporan keuangan.',
               style: TextStyle(height: 1.55)),
           SizedBox(height: 18),
           Card(
@@ -1565,17 +2284,17 @@ class AboutFostifestPage extends StatelessWidget {
               child: Padding(
                   padding: EdgeInsets.all(18),
                   child: Text(
-                      'Hasil OCR, skor, dan simulasi merupakan alat bantu. Pengguna tetap dapat memeriksa serta memperbaiki data sebelum digunakan.',
+                      'Hasil pembacaan struk dan laporan merupakan alat bantu. Periksa kembali data sebelum digunakan.',
                       style: TextStyle(height: 1.45, color: _ink)))),
           SizedBox(height: 22),
-          Text('Yang FOSTIFEST lakukan:',
+          Text('Yang LARAS UMKM lakukan:',
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
           SizedBox(height: 12),
           _AboutPoint(
               text:
                   'Mencatat penjualan manual, dari chat, atau foto bukti transaksi.'),
           _AboutPoint(text: 'Membaca tren omzet dan produk terlaris.'),
-          _AboutPoint(text: 'Menghitung skor kelayakan dan simulasi KUR.'),
+          _AboutPoint(text: 'Mencatat status dokumen legalitas usaha.'),
           _AboutPoint(
               text: 'Menyusun laporan laba rugi dan paket dokumen PDF.'),
           SizedBox(height: 20),
@@ -1637,6 +2356,12 @@ class _EditBusinessProfilePageState extends State<EditBusinessProfilePage> {
   }
 
   Future<void> _choosePhoto() async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Penggantian foto usaha tersedia di aplikasi Android.')));
+      return;
+    }
     setState(() => _pickingPhoto = true);
     try {
       final picked = await ImagePicker().pickImage(
@@ -1721,7 +2446,7 @@ class _EditBusinessProfilePageState extends State<EditBusinessProfilePage> {
               label: const Text('Simpan profil'),
               style: FilledButton.styleFrom(
                 backgroundColor: _brandYellow,
-                foregroundColor: _ink,
+                foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(54),
               ),
             ),
@@ -1761,12 +2486,17 @@ class _ProfileRow extends StatelessWidget {
 class LedgerPage extends StatefulWidget {
   const LedgerPage({
     super.key,
+    this.initialTab = 0,
     required this.profile,
     required this.items,
+    required this.expenses,
+    required this.sales,
     required this.onAdd,
   });
   final BusinessProfile profile;
+  final int initialTab;
   final List<TransactionItem> items;
+  final List<Map<String, dynamic>> expenses, sales;
   final VoidCallback onAdd;
 
   @override
@@ -1782,6 +2512,7 @@ class _LedgerPageState extends State<LedgerPage> {
   @override
   void initState() {
     super.initState();
+    _tab = widget.initialTab;
     final now = DateTime.now();
     _month = DateTime(now.year, now.month);
     _selectedDate = DateTime(now.year, now.month, now.day);
@@ -1792,7 +2523,30 @@ class _LedgerPageState extends State<LedgerPage> {
           item.date.year == _month.year && item.date.month == _month.month)
       .toList();
   int get _income => _monthlyItems.fold(0, (sum, item) => sum + item.amount);
-  int get _expense => 0;
+  List<Map<String, dynamic>> get _monthlyExpenses => widget.expenses.where((e) {
+        final date = DateTime.tryParse('${e['createdAt']}');
+        return date != null &&
+            date.year == _month.year &&
+            date.month == _month.month;
+      }).toList();
+  int get _operatingExpense =>
+      _monthlyExpenses.fold(0, (sum, e) => sum + (e['amount'] as int));
+  int get _costOfGoods => widget.sales.where((e) {
+        final date = DateTime.tryParse('${e['date']}');
+        return date != null &&
+            date.year == _month.year &&
+            date.month == _month.month;
+      }).fold(
+          0,
+          (sum, sale) =>
+              sum +
+              ((sale['items'] as List?) ?? []).fold<int>(
+                  0,
+                  (v, item) =>
+                      v +
+                      ((item['cost'] as int?) ?? 0) *
+                          ((item['quantity'] as int?) ?? 0)));
+  int get _expense => _operatingExpense + _costOfGoods;
   int get _tax => (_income * .005).round();
 
   void _changeMonth(int direction) {
@@ -1809,7 +2563,8 @@ class _LedgerPageState extends State<LedgerPage> {
     final document = pw.Document();
     document.addPage(pw.MultiPage(
         build: (context) => [
-              pw.Header(level: 0, child: pw.Text('FOSTIFEST — Laporan Laba Rugi')),
+              pw.Header(
+                  level: 0, child: pw.Text('LARAS UMKM - Laporan Laba Rugi')),
               pw.Paragraph(text: 'Usaha: ${widget.profile.name}'),
               pw.Paragraph(text: 'Periode: ${formatMonthYear(_month)}'),
               pw.SizedBox(height: 8),
@@ -1840,7 +2595,7 @@ class _LedgerPageState extends State<LedgerPage> {
               pw.Bullet(text: 'Estimasi PPh final 0,5%: ${formatRupiah(_tax)}'),
               pw.SizedBox(height: 12),
               pw.Text(
-                  'Laporan ini merupakan rangkuman pencatatan internal FOSTIFEST dan bukan laporan yang diaudit.'),
+                  'Laporan ini merupakan rangkuman internal dan bukan laporan yang diaudit. Lengkapi harga modal produk dan seluruh biaya usaha agar evaluasi margin semakin akurat.'),
             ]));
     await Printing.sharePdf(
       bytes: await document.save(),
@@ -1937,7 +2692,7 @@ class _LedgerPageState extends State<LedgerPage> {
               label: const Text('Catat transaksi baru'),
               style: FilledButton.styleFrom(
                   backgroundColor: _brandYellow,
-                  foregroundColor: _ink,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(52))),
         ],
       );
@@ -1951,6 +2706,10 @@ class _LedgerPageState extends State<LedgerPage> {
         .toList();
     final selectedIncome =
         selectedItems.fold<int>(0, (sum, item) => sum + item.amount);
+    final selectedExpense = _monthlyExpenses.where((item) {
+      final date = DateTime.tryParse('${item['createdAt']}');
+      return date != null && date.day == _selectedDate.day;
+    }).fold<int>(0, (sum, item) => sum + (item['amount'] as int));
 
     return ListView(
       key: const Key('finance_calendar_page'),
@@ -1981,13 +2740,17 @@ class _LedgerPageState extends State<LedgerPage> {
                       value: selectedIncome,
                       color: const Color(0xFF2E7D32))),
               Container(width: 1, height: 42, color: _divider),
-              const Expanded(
+              Expanded(
                   child: _CalendarTotal(
-                      label: 'Pengeluaran', value: 0, color: _error)),
+                      label: 'Pengeluaran',
+                      value: selectedExpense,
+                      color: _error)),
               Container(width: 1, height: 42, color: _divider),
               Expanded(
                   child: _CalendarTotal(
-                      label: 'Saldo', value: selectedIncome, color: _deepGold)),
+                      label: 'Saldo',
+                      value: selectedIncome - selectedExpense,
+                      color: _deepGold)),
             ]),
           ),
         ),
@@ -2017,7 +2780,7 @@ class _LedgerPageState extends State<LedgerPage> {
             label: const Text('Catat transaksi pada tanggal ini'),
             style: FilledButton.styleFrom(
                 backgroundColor: _brandYellow,
-                foregroundColor: _ink,
+                foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(52))),
       ],
     );
@@ -2046,7 +2809,14 @@ class _LedgerPageState extends State<LedgerPage> {
             const Text('Rincian beban usaha',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
-            const _EmptyMonth(message: 'Belum ada pengeluaran pada bulan ini.'),
+            if (_monthlyExpenses.isEmpty)
+              const _EmptyMonth(
+                  message: 'Belum ada pengeluaran pada bulan ini.')
+            else
+              ..._monthlyExpenses.map((e) => ListTile(
+                  title: Text('${e['name']}'),
+                  subtitle: Text('${e['detail']}'),
+                  trailing: Text(formatRupiah(e['amount'] as int)))),
             const SizedBox(height: 10),
             _ReportTotal(label: 'Total beban', value: _expense, negative: true),
           ] else ...[
@@ -2079,13 +2849,27 @@ class _LedgerPageState extends State<LedgerPage> {
             const Text('Rincian beban usaha',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
-            const _EmptyMonth(message: 'Belum ada pengeluaran pada bulan ini.'),
+            if (_monthlyExpenses.isEmpty)
+              const _EmptyMonth(
+                  message: 'Belum ada pengeluaran pada bulan ini.')
+            else
+              ..._monthlyExpenses.map((e) => ListTile(
+                  title: Text('${e['name']}'),
+                  trailing: Text(formatRupiah(e['amount'] as int)))),
+            _ReportTotal(
+                label: 'Modal produk terjual',
+                value: _costOfGoods,
+                negative: true),
             _ReportTotal(label: 'Total beban', value: _expense, negative: true),
             const SizedBox(height: 18),
             const Text('Ringkasan laba rugi',
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             _ProfitSummary(income: _income, expense: _expense),
+            const SizedBox(height: 8),
+            const Text(
+                'Laba adalah estimasi. Modal transaksi manual dan penjualan lama yang tidak menyimpan harga modal belum dihitung.',
+                style: TextStyle(fontSize: 12, color: _muted)),
             const SizedBox(height: 14),
             Container(
                 padding: const EdgeInsets.all(16),
@@ -2120,11 +2904,11 @@ class _LedgerPageState extends State<LedgerPage> {
               label: const Text('Unduh / bagikan PDF'),
               style: FilledButton.styleFrom(
                   backgroundColor: _brandYellow,
-                  foregroundColor: _ink,
+                  foregroundColor: Colors.white,
                   minimumSize: const Size.fromHeight(54))),
           const SizedBox(height: 9),
           const Text(
-              'Format merangkum pendapatan, beban, laba rugi, dan estimasi pajak dari catatan FOSTIFEST.',
+              'Format merangkum pendapatan, beban, laba rugi, dan estimasi pajak dari catatan LARAS UMKM.',
               style: TextStyle(fontSize: 12, color: _muted, height: 1.35)),
         ],
       );
@@ -2218,8 +3002,8 @@ class _FinanceCalendar extends StatelessWidget {
                           ? _brandYellow
                           : total > 0
                               ? (isDark
-                                  ? const Color(0xFF3A3213)
-                                  : const Color(0xFFFFF7D7))
+                                  ? const Color(0xFF123D2B)
+                                  : const Color(0xFFE4F4E9))
                               : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -2238,8 +3022,7 @@ class _FinanceCalendar extends StatelessWidget {
                           width: 6,
                           height: 6,
                           decoration: const BoxDecoration(
-                              color: Color(0xFF2E7D32),
-                              shape: BoxShape.circle),
+                              color: Color(0xFF2E7D32), shape: BoxShape.circle),
                         ),
                     ]),
                   ),
@@ -2303,7 +3086,10 @@ class _ReportTotal extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
       padding: const EdgeInsets.symmetric(vertical: 14),
       child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w900)),
+        Expanded(
+            child: Text(label,
+                style: const TextStyle(fontWeight: FontWeight.w900))),
+        const SizedBox(width: 12),
         Text(negative ? '(${formatRupiah(value)})' : formatRupiah(value),
             style: TextStyle(
                 fontWeight: FontWeight.w900,
@@ -2370,7 +3156,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
   final _ocr = TextRecognizer(script: TextRecognitionScript.latin);
   DateTime _date = DateTime.now();
   String _unit = 'pcs';
-  String _payment = 'Lunas';
   XFile? _receipt;
   String? _ocrRawText;
   bool _readingReceipt = false;
@@ -2381,11 +3166,17 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
     _amount.dispose();
     _customer.dispose();
     _quantity.dispose();
-    _ocr.close();
+    // Text recognizer is released by the platform lifecycle. Calling close in
+    // widget tests would require a native ML Kit channel that is unavailable.
     super.dispose();
   }
 
   Future<void> _pickReceipt(ImageSource source) async {
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Pemindaian foto tersedia di aplikasi Android.')));
+      return;
+    }
     try {
       final picked = await ImagePicker().pickImage(
         source: source,
@@ -2413,7 +3204,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Text('Pilih foto bukti pembayaran',
+            const Text('Pilih foto catatan',
                 style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
             const SizedBox(height: 14),
             ListTile(
@@ -2421,7 +3212,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
                   backgroundColor: _cream,
                   child: Icon(Icons.camera_alt_outlined, color: _ink)),
               title: const Text('Kamera'),
-              subtitle: const Text('Ambil foto struk atau bukti transfer'),
+              subtitle: const Text('Ambil foto catatan transaksi'),
               onTap: () {
                 Navigator.pop(context);
                 _pickReceipt(ImageSource.camera);
@@ -2511,7 +3302,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             ? 'Manual'
             : _mode == 1
                 ? 'Tempel chat'
-                : 'Scan struk'));
+                : 'Scan foto'));
     _name.clear();
     _amount.clear();
     _customer.clear();
@@ -2538,7 +3329,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               icon: Icon(Icons.chat_bubble_outline)),
           ButtonSegment(
               value: 2,
-              label: Text('Struk'),
+              label: Text('Foto'),
               icon: Icon(Icons.document_scanner_outlined))
         ], selected: {
           _mode
@@ -2626,16 +3417,6 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
               const InputDecoration(labelText: 'Nama pelanggan (opsional)'),
         ),
         const SizedBox(height: 14),
-        DropdownButtonFormField<String>(
-          initialValue: _payment,
-          decoration: const InputDecoration(labelText: 'Status pembayaran'),
-          items: const ['Lunas', 'Belum lunas']
-              .map((status) =>
-                  DropdownMenuItem(value: status, child: Text(status)))
-              .toList(),
-          onChanged: (value) => setState(() => _payment = value ?? 'Lunas'),
-        ),
-        const SizedBox(height: 10),
         if (_ocrRawText != null)
           TextButton.icon(
             onPressed: () => showDialog<void>(
@@ -2659,7 +3440,7 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
             style: FilledButton.styleFrom(
                 minimumSize: const Size.fromHeight(54),
                 backgroundColor: _brandYellow,
-                foregroundColor: _ink,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16))),
             child: const Text('Simpan transaksi')),
@@ -2680,7 +3461,7 @@ class _ReceiptScanIntro extends StatelessWidget {
             SizedBox(width: 10),
             Expanded(
               child: Text(
-                'Unggah bukti pembayaran masuk atau struk penjualan. Periksa hasil pembacaan sebelum menyimpan transaksi.',
+                'Unggah foto catatan transaksi. Periksa hasil pembacaan sebelum menyimpan transaksi.',
                 style: TextStyle(height: 1.4),
               ),
             ),
@@ -2721,7 +3502,7 @@ class _ReceiptPicker extends StatelessWidget {
                         Icon(Icons.add_photo_alternate_outlined,
                             size: 48, color: _muted),
                         SizedBox(height: 8),
-                        Text('Pilih foto bukti pembayaran',
+                        Text('Pilih foto catatan',
                             style: TextStyle(color: _muted)),
                       ])
                 : Image.file(File(receipt!.path), fit: BoxFit.cover),
@@ -2750,13 +3531,13 @@ class _ReceiptPicker extends StatelessWidget {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: _ink))
+                            strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.document_scanner_outlined),
                 label: Text(reading ? 'Membaca…' : 'Proses OCR'),
                 style: FilledButton.styleFrom(
                   minimumSize: const Size.fromHeight(52),
                   backgroundColor: _brandYellow,
-                  foregroundColor: _ink,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ),
@@ -2790,335 +3571,80 @@ class _OcrResultHeader extends StatelessWidget {
       );
 }
 
-class EligibilityPage extends StatefulWidget {
-  const EligibilityPage({
-    super.key,
-    required this.profile,
-    required this.revenue,
-    required this.transactionCount,
-    required this.onAdd,
-  });
-  final BusinessProfile profile;
-  final int revenue;
-  final int transactionCount;
-  final VoidCallback onAdd;
-
+class LegalitasPage extends StatefulWidget {
+  const LegalitasPage({super.key});
   @override
-  State<EligibilityPage> createState() => _EligibilityPageState();
+  State<LegalitasPage> createState() => _LegalitasPageState();
 }
 
-class _EligibilityPageState extends State<EligibilityPage> {
-  int _tab = 0;
-  int _months = 24;
-  bool _nib = true;
-  bool _brand = true;
-  bool _halal = false;
-
-  int get _legalCount => [_nib, _brand, _halal].where((value) => value).length;
-  int get _consistency => (widget.transactionCount * 18).clamp(18, 90);
-  int get _volume => (widget.revenue ~/ 20000).clamp(20, 95);
-  int get _legalScore => (_legalCount * 33).clamp(0, 100);
-  int get _score =>
-      ((_consistency * .38) + (_volume * .34) + (_legalScore * .28)).round();
-  int get _averageMonthlyRevenue => math.max(1, widget.revenue ~/ 6);
-  int get _loanLimit =>
-      math.max(500000, math.min(20000000, _averageMonthlyRevenue * 3));
-
-  int get _monthlyInstallment {
-    const monthlyRate = .06 / 12;
-    final factor = math.pow(1 + monthlyRate, _months);
-    return (_loanLimit * monthlyRate * factor / (factor - 1)).round();
+class _LegalitasPageState extends State<LegalitasPage> {
+  bool _nib = false, _brand = false, _halal = false;
+  bool _loading = true;
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  Future<void> _shareDocumentPackage() async {
-    final document = pw.Document();
-    document.addPage(pw.MultiPage(
-        build: (context) => [
-              pw.Header(
-                  level: 0, child: pw.Text('FOSTIFEST — Paket Kelayakan Usaha')),
-              pw.Paragraph(text: 'Usaha: ${widget.profile.name}'),
-              pw.Paragraph(text: 'Kategori: ${widget.profile.category}'),
-              pw.Paragraph(
-                  text: 'Omzet tercatat: ${formatRupiah(widget.revenue)}'),
-              pw.Paragraph(
-                  text: 'Transaksi tercatat: ${widget.transactionCount}'),
-              pw.Paragraph(text: 'Skor kelayakan FOSTIFEST: $_score / 100'),
-              pw.Paragraph(
-                  text: 'Estimasi plafon: ${formatRupiah(_loanLimit)}'),
-              pw.Paragraph(text: 'Tenor simulasi: $_months bulan'),
-              pw.Paragraph(
-                  text:
-                      'Estimasi cicilan: ${formatRupiah(_monthlyInstallment)} per bulan'),
-              pw.SizedBox(height: 12),
-              pw.Text('Checklist legalitas',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.Bullet(text: 'NIB: ${_nib ? 'Lengkap' : 'Belum ada'}'),
-              pw.Bullet(
-                  text: 'P-IRT / Merek: ${_brand ? 'Lengkap' : 'Belum ada'}'),
-              pw.Bullet(
-                  text:
-                      'Sertifikasi Halal: ${_halal ? 'Lengkap' : 'Belum ada'}'),
-              pw.SizedBox(height: 12),
-              pw.Text(
-                  'Dokumen ini adalah rangkuman pencatatan internal FOSTIFEST, bukan persetujuan kredit dari lembaga keuangan.'),
-            ]));
-    await Printing.sharePdf(
-      bytes: await document.save(),
-      filename: 'paket-kelayakan-fostifest.pdf',
-    );
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted)
+      setState(() {
+        _nib = prefs.getBool('legal_nib') ?? false;
+        _brand = prefs.getBool('legal_brand') ?? false;
+        _halal = prefs.getBool('legal_halal') ?? false;
+        _loading = false;
+      });
+  }
+
+  Future<void> _change(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!await prefs.setBool(key, value)) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Status legalitas gagal disimpan.')));
+      return;
+    }
+    if (mounted)
+      setState(() {
+        if (key == 'legal_nib') {
+          _nib = value;
+        } else if (key == 'legal_brand') {
+          _brand = value;
+        } else {
+          _halal = value;
+        }
+      });
   }
 
   @override
-  Widget build(BuildContext context) => Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Row(children: [
-            Expanded(
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Kelayakan usaha',
-                        style: TextStyle(
-                            fontSize: 22, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 3),
-                    const Text('Skor dan kesiapan akses pembiayaan.',
-                        style: TextStyle(color: _muted)),
-                  ]),
-            ),
-            const Icon(Icons.verified_user_outlined, color: _deepGold),
-          ]),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(
-                  value: 0,
-                  label: Text('Skor'),
-                  icon: Icon(Icons.donut_large_outlined)),
-              ButtonSegment(
-                  value: 1,
-                  label: Text('KUR'),
-                  icon: Icon(Icons.account_balance_outlined)),
-            ],
-            selected: {_tab},
-            onSelectionChanged: (value) => setState(() => _tab = value.first),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Expanded(
-          child: _tab == 0 ? _buildScore() : _buildKur(),
-        ),
-      ]);
-
-  Widget _buildScore() => ListView(
-        key: const Key('eligibility_score_page'),
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        children: [
-          Center(child: _ScoreRing(score: _score)),
-          const SizedBox(height: 12),
-          Center(child: _ScorePill(score: _score)),
-          const SizedBox(height: 20),
-          Card(
-            color: _cream,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Skor $_score/100 dihitung dari konsistensi pencatatan, volume penjualan, dan legalitas yang kamu isi. Tambahkan catatan transaksi dan lengkapi dokumen untuk menaikkan kesiapan.',
-                style: const TextStyle(height: 1.45),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text('Rincian faktor skor',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 12),
-          FactorTile(
-              label: 'Konsistensi transaksi',
-              value: _consistency,
-              color: _brandYellow),
-          FactorTile(label: 'Volume penjualan', value: _volume, color: _gold),
-          FactorTile(
-              label: 'Legalitas usaha', value: _legalScore, color: _deepGold),
-          const SizedBox(height: 4),
-          OutlinedButton.icon(
-              onPressed: widget.onAdd,
-              icon: const Icon(Icons.add),
-              label: const Text('Catat transaksi untuk menaikkan skor')),
-        ],
-      );
-
-  Widget _buildKur() => ListView(
-        key: const Key('eligibility_kur_page'),
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-        children: [
-          Card(
-              child: Padding(
-            padding: const EdgeInsets.all(18),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.profile.name,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 14),
-              _KurMetric(
-                  label: 'Omzet tercatat', value: formatRupiah(widget.revenue)),
-              _KurMetric(
-                  label: 'Rata-rata / bulan',
-                  value: formatRupiah(_averageMonthlyRevenue)),
-              _KurMetric(
-                  label: 'Total transaksi',
-                  value: '${widget.transactionCount}'),
-              _KurMetric(
-                  label: 'Skor kelayakan saat ini', value: '$_score / 100'),
-            ]),
-          )),
-          const SizedBox(height: 16),
-          Card(
-              child: Padding(
-            padding: const EdgeInsets.all(18),
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('SIMULASI PLAFON',
-                  style: TextStyle(
-                      fontSize: 11,
-                      letterSpacing: .7,
-                      fontWeight: FontWeight.w900,
-                      color: _muted)),
-              const SizedBox(height: 5),
-              Text(formatRupiah(_loanLimit),
-                  style: const TextStyle(
-                      fontSize: 30, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 16),
-              Row(
-                  children: [12, 24, 36]
-                      .map((months) => Expanded(
-                              child: Padding(
-                            padding:
-                                EdgeInsets.only(right: months == 36 ? 0 : 8),
-                            child: ChoiceChip(
-                                label: Text('$months bln'),
-                                selected: _months == months,
-                                onSelected: (_) =>
-                                    setState(() => _months = months)),
-                          )))
-                      .toList()),
-              const SizedBox(height: 16),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 18),
-                decoration: BoxDecoration(
-                    color: _cream, borderRadius: BorderRadius.circular(16)),
-                child: Column(children: [
-                  const Text('Estimasi cicilan per bulan',
-                      style: TextStyle(color: _muted)),
-                  const SizedBox(height: 5),
-                  Text(formatRupiah(_monthlyInstallment),
-                      style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: _deepGold)),
-                ]),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                  'Simulasi memakai asumsi bunga efektif 6% per tahun. Nilai akhir mengikuti kebijakan penyalur KUR.',
-                  style: TextStyle(fontSize: 12, color: _muted, height: 1.35)),
-            ]),
-          )),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: _shareDocumentPackage,
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            label: const Text('Buat & bagikan paket dokumen (PDF)'),
-            style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-                backgroundColor: _brandYellow,
-                foregroundColor: _ink),
-          ),
-          const SizedBox(height: 26),
-          const Text('Jalur legalitas usaha',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900)),
-          const SizedBox(height: 4),
+  Widget build(BuildContext context) => _loading
+      ? const Center(child: CircularProgressIndicator())
+      : ListView(padding: const EdgeInsets.fromLTRB(20, 20, 20, 24), children: [
+          const Text('Legalitas usaha',
+              key: Key('legalitas_page'),
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.w900, color: _ink)),
+          const SizedBox(height: 6),
           const Text(
-              'Centang dokumen yang sudah kamu punya. Ini catatan internal FOSTIFEST, bukan verifikasi resmi.',
-              style: TextStyle(color: _muted, height: 1.35)),
-          const SizedBox(height: 12),
+              'Catat dokumen yang sudah dimiliki usaha. Status ini merupakan catatan pribadi, bukan verifikasi resmi.',
+              style: TextStyle(color: _muted, height: 1.4)),
+          const SizedBox(height: 20),
           _LegalTile(
               label: 'NIB (Nomor Induk Berusaha)',
               complete: _nib,
-              onChanged: (value) => setState(() => _nib = value)),
+              onChanged: (value) => _change('legal_nib', value)),
           const SizedBox(height: 10),
           _LegalTile(
               label: 'P-IRT / Merek',
               complete: _brand,
-              onChanged: (value) => setState(() => _brand = value)),
+              onChanged: (value) => _change('legal_brand', value)),
           const SizedBox(height: 10),
           _LegalTile(
               label: 'Sertifikasi Halal',
               complete: _halal,
-              onChanged: (value) => setState(() => _halal = value)),
-          TextButton.icon(
-              onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          'Panduan legalitas disiapkan di pembaruan berikutnya.'))),
-              icon: const Icon(Icons.arrow_forward),
-              label: const Text('Lihat panduan singkat')),
-        ],
-      );
-}
-
-class _ScoreRing extends StatelessWidget {
-  const _ScoreRing({required this.score});
-  final int score;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-      width: 186,
-      height: 186,
-      child: Stack(alignment: Alignment.center, children: [
-        CircularProgressIndicator(
-            value: score / 100,
-            strokeWidth: 16,
-            backgroundColor: _cream,
-            color: _gold),
-        Column(mainAxisSize: MainAxisSize.min, children: [
-          Text('$score',
-              style: const TextStyle(
-                  fontSize: 48, fontWeight: FontWeight.w900, color: _ink)),
-          const Text('DARI 100',
-              style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w800, color: _muted)),
-        ]),
-      ]));
-}
-
-class _ScorePill extends StatelessWidget {
-  const _ScorePill({required this.score});
-  final int score;
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 8),
-        decoration: BoxDecoration(
-            color: _cream, borderRadius: BorderRadius.circular(20)),
-        child: Text(score >= 70 ? 'Siap berkembang' : 'Perlu peningkatan',
-            style:
-                const TextStyle(fontWeight: FontWeight.w800, color: _deepGold)),
-      );
-}
-
-class _KurMetric extends StatelessWidget {
-  const _KurMetric({required this.label, required this.value});
-  final String label, value;
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child:
-            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(label, style: const TextStyle(color: _muted)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w800))
-        ]),
-      );
+              onChanged: (value) => _change('legal_halal', value)),
+        ]);
 }
 
 class _LegalTile extends StatelessWidget {
@@ -3134,7 +3660,7 @@ class _LegalTile extends StatelessWidget {
         onChanged: (value) => onChanged(value ?? false),
         controlAffinity: ListTileControlAffinity.leading,
         activeColor: _brandYellow,
-        checkColor: _ink,
+        checkColor: Colors.white,
         title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
         secondary: Container(
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -3163,7 +3689,7 @@ class _FostiPageState extends State<FostiPage> {
   final _input = TextEditingController();
   final List<_Chat> _messages = [
     _Chat(false,
-        'Halo, aku Fosti. Aku bisa membantu membaca kondisi usahamu dari data FOSTIFEST. Kamu mau bahas omzet, skor kesiapan, atau langkah berikutnya?')
+        'Halo, aku Laras. Aku bisa membantu membaca catatan usahamu. Kamu mau bahas penjualan, biaya, atau langkah berikutnya?')
   ];
 
   @override
@@ -3178,7 +3704,7 @@ class _FostiPageState extends State<FostiPage> {
     setState(() {
       _messages.add(_Chat(true, question));
       _messages.add(_Chat(false,
-          'Dari ${widget.transactionCount} transaksi yang tercatat, omzetmu saat ini ${formatRupiah(widget.revenue)}. Prioritas terbaikmu adalah menjaga pencatatan harian dan melengkapi legalitas usaha agar skor kesiapan naik.'));
+          'Dari ${widget.transactionCount} transaksi yang tercatat, penjualanmu saat ini ${formatRupiah(widget.revenue)}. Periksa pengeluaran dan modal produk untuk memahami hasil usahamu.'));
       _input.clear();
     });
   }
@@ -3191,13 +3717,13 @@ class _FostiPageState extends State<FostiPage> {
             child: Row(children: [
               CircleAvatar(
                   backgroundColor: _brandYellow,
-                  child: Icon(Icons.auto_awesome, color: _ink)),
+                  child: Icon(Icons.auto_awesome, color: Colors.white)),
               SizedBox(width: 10),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Fosti',
+                Text('Laras',
                     style:
                         TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
-                Text('Asisten usaha FOSTIFEST',
+                Text('Asisten usaha LARAS UMKM',
                     style: TextStyle(fontSize: 12, color: _muted)),
               ]),
             ]),
@@ -3220,7 +3746,9 @@ class _FostiPageState extends State<FostiPage> {
                         color: message.mine ? _brandYellow : _warmWhite,
                         borderRadius: BorderRadius.circular(16)),
                     child: Text(message.text,
-                        style: TextStyle(color: _ink, height: 1.4)),
+                        style: TextStyle(
+                            color: message.mine ? Colors.white : _ink,
+                            height: 1.4)),
                   ),
                 );
               },
@@ -3232,7 +3760,7 @@ class _FostiPageState extends State<FostiPage> {
             child: Row(
                 children: [
               'Bagaimana omzetku?',
-              'Cara naikkan skor?',
+              'Bagaimana pengeluaranku?',
               'Apa langkah berikutnya?'
             ]
                     .map((text) => Padding(
@@ -3249,7 +3777,7 @@ class _FostiPageState extends State<FostiPage> {
                       controller: _input,
                       onSubmitted: (_) => _ask(),
                       decoration: const InputDecoration(
-                          hintText: 'Tanya Fosti…',
+                          hintText: 'Tanya Laras...',
                           filled: true,
                           fillColor: _warmWhite,
                           border: OutlineInputBorder(
@@ -3260,7 +3788,7 @@ class _FostiPageState extends State<FostiPage> {
               IconButton.filled(
                   onPressed: _ask,
                   style: IconButton.styleFrom(backgroundColor: _brandYellow),
-                  icon: const Icon(Icons.arrow_upward, color: _ink)),
+                  icon: const Icon(Icons.arrow_upward, color: Colors.white)),
             ]),
           ),
         ],
@@ -3279,30 +3807,50 @@ class MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
       width: 220,
-      child: Card(
-          elevation: 0,
-          color: accent,
+      child: DecoratedBox(
+          decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1FB36F),
+                    Color(0xFF45C98E),
+                    Color(0xFFBFF0D6)
+                  ],
+                  stops: [
+                    0,
+                    .65,
+                    1
+                  ]),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _divider)),
           child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 10,
                             letterSpacing: .6,
                             fontWeight: FontWeight.w900,
-                            color: Colors.white)),
+                            color: _ink)),
                     const Spacer(),
-                    Text(value,
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white)),
-                    const SizedBox(height: 4),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(value,
+                          style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w900,
+                              color: _ink)),
+                    ),
                     Text(note,
-                        style:
-                            const TextStyle(fontSize: 10, color: Colors.white))
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 10, color: _ink))
                   ]))));
 }
 
@@ -3317,65 +3865,6 @@ class SectionTitle extends StatelessWidget {
               fontSize: 16, fontWeight: FontWeight.w900, color: _ink)));
 }
 
-class ActionCard extends StatelessWidget {
-  const ActionCard(
-      {super.key,
-      required this.icon,
-      required this.title,
-      required this.subtitle,
-      required this.action});
-  final IconData icon;
-  final String title, subtitle, action;
-  @override
-  Widget build(BuildContext context) => Card(
-      elevation: 0,
-      child: ListTile(
-          leading: CircleAvatar(
-              backgroundColor: _cream, child: Icon(icon, color: _ink)),
-          title:
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
-          subtitle: Text(subtitle),
-          trailing: Text(action,
-              style:
-                  const TextStyle(color: _ink, fontWeight: FontWeight.w800))));
-}
-
-class FactorTile extends StatelessWidget {
-  const FactorTile(
-      {super.key,
-      required this.label,
-      required this.value,
-      required this.color});
-  final String label;
-  final int value;
-  final Color color;
-  @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Card(
-          elevation: 0,
-          child: Padding(
-              padding: const EdgeInsets.all(15),
-              child: Column(children: [
-                Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(label,
-                          style: const TextStyle(fontWeight: FontWeight.w800)),
-                      Text('$value',
-                          style: TextStyle(
-                              fontWeight: FontWeight.w900, color: color))
-                    ]),
-                const SizedBox(height: 10),
-                LinearProgressIndicator(
-                    value: value / 100,
-                    minHeight: 8,
-                    borderRadius: BorderRadius.circular(8),
-                    color: color,
-                    backgroundColor: _cream)
-              ]))));
-}
-
 class _Chat {
   _Chat(this.mine, this.text);
   final bool mine;
@@ -3383,6 +3872,7 @@ class _Chat {
 }
 
 String formatRupiah(int amount) {
+  if (amount < 0) return '-${formatRupiah(-amount)}';
   final digits = amount.toString();
   final reversed = digits.split('').reversed.toList();
   final chunks = <String>[];

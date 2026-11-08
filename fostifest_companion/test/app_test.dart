@@ -7,9 +7,9 @@ Future<void> enterDemo(WidgetTester tester) async {
   await tester.pumpWidget(const FostifestApp());
   await tester.pump(const Duration(milliseconds: 1500));
   await tester.pumpAndSettle();
-  await tester.ensureVisible(find.text('Masuk ke akun demo FOSTIFEST'));
+  await tester.ensureVisible(find.text('Masuk ke akun demo LARAS UMKM'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Masuk ke akun demo FOSTIFEST'));
+  await tester.tap(find.text('Masuk ke akun demo LARAS UMKM'));
   await tester.pumpAndSettle();
 }
 
@@ -27,59 +27,117 @@ void main() {
 
     final avatar = tester.getRect(find.byKey(const Key('home_avatar')));
     final brand = tester.getRect(find.byKey(const Key('home_brand')));
-    final greeting = tester.getRect(find.byKey(const Key('home_greeting')));
-    final subtitle = tester.getRect(find.byKey(const Key('home_subtitle')));
+    final search = tester.getRect(find.byKey(const Key('feature_search')));
     final card = tester.getRect(find.byKey(const Key('home_summary_card')));
 
     expect(brand.top, greaterThan(avatar.top - 6));
     expect(brand.bottom, lessThan(avatar.bottom));
-    expect(greeting.top, greaterThan(avatar.bottom + 15));
-    expect(subtitle.top, greaterThan(greeting.bottom));
-    expect(card.top, greaterThanOrEqualTo(subtitle.bottom + 18));
-    expect(card.top, lessThanOrEqualTo(subtitle.bottom + 34));
+    expect(find.byKey(const Key('home_greeting')), findsNothing);
+    expect(find.byKey(const Key('home_subtitle')), findsNothing);
+    expect(search.top, greaterThanOrEqualTo(avatar.bottom));
+    expect(card.top, greaterThan(search.bottom));
+    expect(card.top - search.bottom, 16);
     expect(card.left, greaterThanOrEqualTo(16));
     expect(card.right, lessThanOrEqualTo(374));
   });
 
-  testWidgets('ikon Catat Cerdas memiliki lencana uang berlatar hijau',
+  testWidgets('pencarian fitur membuka layar pengeluaran', (tester) async {
+    await enterDemo(tester);
+    await tester.enterText(
+        find.byKey(const Key('feature_search')), 'pengeluaran');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('feature_search_results')), findsOneWidget);
+    await tester.tap(find.text('Pengeluaran').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Keuangan'), findsWidgets);
+    expect(find.text('Catat pemasukan'), findsOneWidget);
+  });
+
+  testWidgets('pencarian tidak dikenal menunjukkan keadaan kosong',
       (tester) async {
     await enterDemo(tester);
-    final icon = find.byKey(const Key('smart_record_icon'));
-    expect(icon, findsOneWidget);
+    await tester.enterText(find.byKey(const Key('feature_search')), 'xyzfitur');
+    await tester.pumpAndSettle();
+    expect(find.text('Fitur tidak ditemukan. Coba kata lain.'), findsOneWidget);
+  });
+
+  testWidgets('pencarian KUR tidak menawarkan fitur yang dihapus',
+      (tester) async {
+    await enterDemo(tester);
+    await tester.enterText(find.byKey(const Key('feature_search')), 'KUR');
+    await tester.pumpAndSettle();
+    expect(find.text('Fitur tidak ditemukan. Coba kata lain.'), findsOneWidget);
+  });
+
+  testWidgets('tombol hijau memiliki teks putih', (tester) async {
+    await enterDemo(tester);
+    final button = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Catat transaksi sekarang'));
+    expect(button.style!.foregroundColor!.resolve({}), Colors.white);
+  });
+
+  testWidgets('pencarian laporan membuka tab laporan', (tester) async {
+    await enterDemo(tester);
+    await tester.enterText(find.byKey(const Key('feature_search')), 'laporan');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Laporan keuangan'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('finance_report_page')), findsOneWidget);
+  });
+
+  testWidgets('tab tengah bernama Manage Cerdas dan menampilkan ikon fitur',
+      (tester) async {
+    await enterDemo(tester);
+    expect(find.text('Catat Cerdas'), findsNothing);
+    await tester.tap(find.text('Manage Cerdas'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('manage_cerdas_page')), findsOneWidget);
+    for (final key in ['keuangan', 'pelanggan', 'produk', 'margin']) {
+      expect(find.byKey(Key('manage_$key')), findsOneWidget);
+    }
+    expect(find.text('Pusat Operasi Usaha'), findsNothing);
+    expect(find.text('Pembayaran'), findsNothing);
+    expect(find.text('Kasir'), findsNothing);
+  });
+
+  testWidgets('Harga & Margin dapat dibuka dari Manage Cerdas', (tester) async {
+    await enterDemo(tester);
+    await tester.tap(find.text('Manage Cerdas'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('manage_margin')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manage_margin')));
+    await tester.pumpAndSettle();
+    expect(find.text('Harga & margin produk'), findsOneWidget);
+  });
+
+  testWidgets('legalitas tetap tersedia dari Manage Cerdas dan tersimpan',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await enterDemo(tester);
+    await tester.tap(find.text('Manage Cerdas'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('manage_legalitas')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('legalitas_page')), findsOneWidget);
+    await tester.tap(find.byType(CheckboxListTile).first);
+    await tester.pumpAndSettle();
     expect(
-        find.descendant(of: icon, matching: find.text('\$')), findsOneWidget);
-
-    final coin = tester.widget<Container>(
-      find.descendant(of: icon, matching: find.byType(Container)).last,
-    );
-    final decoration = coin.decoration! as BoxDecoration;
-    expect(decoration.color, const Color(0xFF0B5D3B));
-  });
-
-  testWidgets('Catat Cerdas membuka form transaksi manual yang lengkap',
-      (tester) async {
-    await enterDemo(tester);
-    await tester.tap(find.text('Catat Cerdas'));
+        (await SharedPreferences.getInstance()).getBool('legal_nib'), isTrue);
+    await tester.pageBack();
     await tester.pumpAndSettle();
-
-    expect(find.text('Catat transaksi'), findsOneWidget);
-    expect(find.text('Tanggal'), findsOneWidget);
-    expect(find.text('Nama produk atau keterangan'), findsOneWidget);
-    expect(find.text('Total transaksi'), findsOneWidget);
-  });
-
-  testWidgets('Kelayakan menampilkan skor usaha dan simulasi KUR',
-      (tester) async {
-    await enterDemo(tester);
-    await tester.tap(find.text('Kelayakan'));
+    await tester.tap(find.byKey(const Key('manage_legalitas')));
     await tester.pumpAndSettle();
-
-    expect(find.text('Kelayakan usaha'), findsOneWidget);
-    expect(find.text('DARI 100'), findsOneWidget);
-
-    await tester.tap(find.text('KUR'));
-    await tester.pumpAndSettle();
-    expect(find.text('SIMULASI PLAFON'), findsOneWidget);
+    expect(
+        tester
+            .widget<CheckboxListTile>(find.byType(CheckboxListTile).first)
+            .value,
+        isTrue);
   });
 
   testWidgets('Catatan keuangan membuka laporan bulanan dan PDF',
@@ -105,7 +163,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Belum punya akun? Daftar'));
     await tester.pumpAndSettle();
-    expect(find.text('Daftar akun FOSTIFEST'), findsOneWidget);
+    expect(find.text('Daftar akun LARAS UMKM'), findsOneWidget);
 
     await tester.enterText(
         find.byKey(const Key('register_name')), 'Alif Pemilik Usaha');
@@ -120,7 +178,7 @@ void main() {
     await tester.tap(find.byKey(const Key('register_submit')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Halo, Batik Sekar 👋'), findsOneWidget);
+    expect(find.byKey(const Key('feature_search')), findsOneWidget);
     final saved = await SharedPreferences.getInstance();
     expect(saved.getString('account_identifier'), 'alif@fostifest.id');
 
@@ -135,7 +193,7 @@ void main() {
         find.widgetWithText(TextField, 'Minimal 6 karakter'), 'rahasia123');
     await tester.tap(find.widgetWithText(FilledButton, 'Masuk'));
     await tester.pumpAndSettle();
-    expect(find.text('Halo, Batik Sekar 👋'), findsOneWidget);
+    expect(find.byKey(const Key('feature_search')), findsOneWidget);
   });
 
   testWidgets('kalender catatan menampilkan transaksi per tanggal',
@@ -161,13 +219,13 @@ void main() {
         findsOneWidget);
   });
 
-  testWidgets('tombol Fosti membuka halaman chat', (tester) async {
+  testWidgets('tombol Laras membuka halaman chat', (tester) async {
     await enterDemo(tester);
-    await tester.tap(find.widgetWithText(FloatingActionButton, 'Fosti'));
+    await tester.tap(find.widgetWithText(FloatingActionButton, 'Laras'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Asisten usaha FOSTIFEST'), findsOneWidget);
-    expect(find.text('Tanya Fosti…'), findsOneWidget);
+    expect(find.text('Asisten usaha LARAS UMKM'), findsOneWidget);
+    expect(find.text('Tanya Laras...'), findsOneWidget);
   });
 
   testWidgets('profil usaha dapat diedit dan muncul di beranda',
@@ -188,8 +246,28 @@ void main() {
     expect(find.text('Batik Melati'), findsWidgets);
     await tester.tap(find.text('Beranda'));
     await tester.pumpAndSettle();
-    expect(find.text('Halo, Batik Melati 👋'), findsOneWidget);
+    expect(find.text('LARAS UMKM'), findsWidgets);
     final saved = await SharedPreferences.getInstance();
     expect(saved.getString('business_name'), 'Batik Melati');
+  });
+
+  testWidgets('panduan dan privasi usaha dapat dibuka dari profil',
+      (tester) async {
+    await enterDemo(tester);
+    await tester.tap(find.text('Profil'));
+    await tester.pumpAndSettle();
+    expect(find.text('Produk dan stok'), findsNothing);
+
+    await tester.scrollUntilVisible(find.text('Panduan LARAS UMKM'), 180);
+    await tester.tap(find.text('Panduan LARAS UMKM'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mulai mengelola usaha'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('Privasi dan data usaha'), 180);
+    await tester.tap(find.text('Privasi dan data usaha'));
+    await tester.pumpAndSettle();
+    expect(find.text('Data usaha tetap milikmu'), findsOneWidget);
   });
 }

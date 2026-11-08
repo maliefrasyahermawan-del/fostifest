@@ -7,3 +7,8 @@
 # Flutter generated directories (also ignored in the nested app project)
 **/build/
 **/.dart_tool/
+
+# Third-party benchmark app binaries and golden-test failure artifacts
+benchmark aplikasi*/
+*.xapk
+fostifest_companion/test/failures/
