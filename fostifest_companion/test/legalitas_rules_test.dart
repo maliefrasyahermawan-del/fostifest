@@ -38,4 +38,16 @@ void main() {
     expect(rules.any((e) => e.id == 'halal'), isTrue);
     expect(rules.any((e) => e.id == 'food_permit'), isTrue);
   });
+
+  test('profil rusak diabaikan', () {
+    expect(decodeLegalProfile('{json-rusak'), isNull);
+    expect(decodeLegalProfile('[]'), isNull);
+  });
+
+  test('sektor lama dinormalisasi sebelum dipakai dropdown', () {
+    final profile = decodeLegalProfile(
+        '{"sector":"batik","product":"Kain","risk":"unknown"}');
+    expect(profile?['sector'], '');
+    expect(profile?['product'], 'Kain');
+  });
 }

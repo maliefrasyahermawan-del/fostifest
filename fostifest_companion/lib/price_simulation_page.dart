@@ -239,7 +239,10 @@ class _PriceSimulationPageState extends State<PriceSimulationPage> {
         positive = r.profit >= 0,
         material = _find(_materials, _materialId);
     return Scaffold(
+      backgroundColor: const Color(0xFFF3F6F5),
       appBar: AppBar(
+        backgroundColor: const Color(0xFFF3F6F5),
+        surfaceTintColor: Colors.transparent,
         title: const Text(
           'Simulasi Harga Produk',
           style: TextStyle(fontWeight: FontWeight.w900),
@@ -259,10 +262,8 @@ class _PriceSimulationPageState extends State<PriceSimulationPage> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF176B45), Color(0xFF2CB875)],
-              ),
-              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF087A55),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

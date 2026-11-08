@@ -331,13 +331,7 @@ class _FostifestAppState extends State<FostifestApp> {
         return;
       case 'legalitas':
         await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
-          builder: (_) => Scaffold(
-            appBar: AppBar(
-              title: const Text('Legalitas usaha',
-                  style: TextStyle(fontWeight: FontWeight.w900)),
-            ),
-            body: const SafeArea(child: legal_v2.LegalitasPage()),
-          ),
+          builder: (_) => const legal_v2.LegalitasPage(),
         ));
         return;
       case 'profil':

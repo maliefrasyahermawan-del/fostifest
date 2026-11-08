@@ -6,6 +6,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const legalProfileKey = 'laras_legal_profile_v2';
 const legalChecklistKey = 'laras_legal_checklist_v2';
+const legalSectors = {'kuliner', 'fashion', 'perdagangan', 'jasa'};
+
+Map<String, dynamic>? decodeLegalProfile(String? raw) {
+  if (raw == null || raw.trim().isEmpty) return null;
+  try {
+    final value = jsonDecode(raw);
+    if (value is! Map) return null;
+    final profile = Map<String, dynamic>.from(value);
+    final sector = '${profile['sector'] ?? ''}'.toLowerCase();
+    profile['sector'] = legalSectors.contains(sector) ? sector : '';
+    return profile;
+  } catch (_) {
+    return null;
+  }
+}
 
 enum BusinessScale { micro, small, medium, outside }
 
@@ -284,18 +299,21 @@ class _LegalitasPageState extends State<LegalitasPage> {
     final p = await SharedPreferences.getInstance();
     final raw = p.getString(legalProfileKey);
     final checklist = p.getStringList(legalChecklistKey) ?? [];
-    if (raw != null) {
-      final j = Map<String, dynamic>.from(jsonDecode(raw));
-      _sector = '${j['sector'] ?? ''}';
-      _product.text = '${j['product'] ?? ''}';
-      _kbli.text = '${j['kbli'] ?? ''}';
-      _scope.text = '${j['scope'] ?? ''}';
-      _capital.text = '${j['capital'] ?? 0}';
-      _revenue.text = '${j['revenue'] ?? 0}';
+    final profile = decodeLegalProfile(raw);
+    if (profile != null) {
+      _sector = '${profile['sector'] ?? ''}';
+      _product.text = '${profile['product'] ?? ''}';
+      _kbli.text = '${profile['kbli'] ?? ''}';
+      _scope.text = '${profile['scope'] ?? ''}';
+      _capital.text = '${profile['capital'] ?? 0}';
+      _revenue.text = '${profile['revenue'] ?? 0}';
       _risk = LegalRisk.values.firstWhere(
-        (e) => e.name == j['risk'],
+        (e) => e.name == profile['risk'],
         orElse: () => LegalRisk.unknown,
       );
+    } else if (raw != null) {
+      // Profil lama/rusak diabaikan agar halaman tetap dapat dibuka.
+      await p.remove(legalProfileKey);
     }
     final migrated = <String>{...checklist};
     if (p.getBool('legal_nib') == true) migrated.add('nib');
@@ -340,12 +358,92 @@ class _LegalitasPageState extends State<LegalitasPage> {
         hintText: hint,
         border: const OutlineInputBorder(),
       );
+
+  Future<void> _showDetail(LegalRecommendation r) => showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: const Color(0xFFF8FAF9),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        builder: (sheetContext) => DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: .82,
+          maxChildSize: .94,
+          builder: (_, controller) => ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCAD5D0),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(r.title,
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              Text(r.status, style: const TextStyle(color: Color(0xFF5F766C))),
+              const SizedBox(height: 20),
+              Text(
+                r.conditional
+                    ? 'Perlu dikonfirmasi sesuai kondisi usaha'
+                    : 'Dokumen yang disiapkan',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              for (final document in r.documents)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.description_outlined,
+                      color: Color(0xFF087A55)),
+                  title: Text(document),
+                ),
+              const SizedBox(height: 10),
+              const Text('Langkah pengurusan',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              for (var i = 0; i < r.steps.length; i++)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 13,
+                    backgroundColor: const Color(0xFFDDF3EA),
+                    child: Text('${i + 1}',
+                        style: const TextStyle(
+                            color: Color(0xFF087A55),
+                            fontWeight: FontWeight.w900)),
+                  ),
+                  title: Text(r.steps[i]),
+                ),
+              const SizedBox(height: 12),
+              const Text('Situs pemerintah',
+                  style: TextStyle(fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              SelectableText(r.url,
+                  style: const TextStyle(
+                      color: Color(0xFF087A55), fontWeight: FontWeight.w800)),
+            ],
+          ),
+        ),
+      );
   @override
   Widget build(BuildContext context) {
     if (_loading)
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     final conflicting = _capitalScale != _revenueScale;
     return Scaffold(
+      backgroundColor: const Color(0xFFF3F6F5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF3F6F5),
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Legalitas usaha',
+            style: TextStyle(fontWeight: FontWeight.w900)),
+      ),
       body: ListView(
         key: const Key('legalitas_page'),
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 40),
@@ -353,10 +451,8 @@ class _LegalitasPageState extends State<LegalitasPage> {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF176B45), Color(0xFF2CB875)],
-              ),
-              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF087A55),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,76 +616,33 @@ class _LegalitasPageState extends State<LegalitasPage> {
           const SizedBox(height: 8),
           for (final r in _rules.where((item) => item.id != 'nib'))
             Card(
-              child: Column(
-                children: [
-                  CheckboxListTile(
-                    key: Key('legal_${r.id}'),
-                    value: _checked.contains(r.id),
-                    onChanged: (v) {
-                      setState(() {
-                        if (v == true) {
-                          _checked.add(r.id);
-                        } else {
-                          _checked.remove(r.id);
-                        }
-                      });
-                      _persist();
-                    },
-                    title: Text(r.title,
-                        style: const TextStyle(fontWeight: FontWeight.w900)),
-                    subtitle: Text(r.status),
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                  ExpansionTile(
-                    title: const Text('Dokumen, langkah, dan tautan resmi',
-                        style: TextStyle(fontWeight: FontWeight.w700)),
-                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          r.conditional
-                              ? 'Perlu konfirmasi kondisi usaha'
-                              : 'Dokumen yang disiapkan',
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      for (final d in r.documents)
-                        ListTile(
-                          dense: true,
-                          leading:
-                              const Icon(Icons.description_outlined, size: 18),
-                          title: Text(d),
-                        ),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Langkah',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
-                      for (var i = 0; i < r.steps.length; i)
-                        ListTile(
-                          dense: true,
-                          leading: CircleAvatar(
-                            radius: 11,
-                            child: Text(
-                              '${i + 1}',
-                              style: const TextStyle(fontSize: 11),
-                            ),
-                          ),
-                          title: Text(r.steps[i]),
-                        ),
-                      SelectableText(
-                        r.url,
-                        style: const TextStyle(
-                          color: Color(0xFF087A45),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
+              child: CheckboxListTile(
+                key: Key('legal_${r.id}'),
+                value: _checked.contains(r.id),
+                onChanged: (v) {
+                  setState(() {
+                    if (v == true) {
+                      _checked.add(r.id);
+                    } else {
+                      _checked.remove(r.id);
+                    }
+                  });
+                  _persist();
+                },
+                title: Text(r.title,
+                    style: const TextStyle(fontWeight: FontWeight.w900)),
+                subtitle: Text('${r.status}\nKetuk untuk melihat persyaratan'),
+                isThreeLine: true,
+                controlAffinity: ListTileControlAffinity.leading,
+                secondary: IconButton(
+                  tooltip: 'Lihat persyaratan',
+                  onPressed: () => _showDetail(r),
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
+                tileColor: Colors.white,
               ),
             ),
         ],
