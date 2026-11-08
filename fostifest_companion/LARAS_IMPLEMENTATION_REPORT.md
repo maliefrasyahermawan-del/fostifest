@@ -1,5 +1,7 @@
 # LARAS UMKM — Implementation Report
 
+> **Catatan:** dokumen ini mencatat implementasi pada tahap awal. Sebagian fitur, terutama Legalitas dan desain antarmuka, sudah diperbarui. Lihat [README utama](../README.md) dan [CHANGELOG.md](../CHANGELOG.md) untuk kondisi terkini.
+
 ## Ringkasan
 
 LARAS adalah aplikasi manajemen keuangan UMKM berbasis Flutter dengan data lokal. Refactor ini menghapus total Kasir/POS, piutang, QRIS, payment link, rekening bank, gateway pembayaran, dan fitur pembayaran digital. Aplikasi tidak menerima, memproses, atau memverifikasi pembayaran otomatis.

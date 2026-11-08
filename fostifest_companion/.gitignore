@@ -47,3 +47,37 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Local editor settings
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+/android/local.properties
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Golden test failures and local artifacts
+/test/failures/
+*.apk
+*.aab
+*.xapk
+*.ipa
+*.zip

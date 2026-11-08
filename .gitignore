@@ -1,14 +1,57 @@
-# Temporary guidebook renderings
+# --- Sistem operasi dan editor ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.history/
+
+# --- Log dan file sementara ---
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+.~*
 /tmp/
 
-# Generated Android artifacts are kept locally or published as releases.
-*.apk
+# --- Environment dan secret ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
 
-# Flutter generated directories (also ignored in the nested app project)
+# --- Flutter dan Dart ---
 **/build/
 **/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.pub-cache/
+**/.pub/
+**/coverage/
+**/test/failures/
+**/android/.kotlin/
+**/android/local.properties
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+**/app.*.symbols
+**/app.*.map.json
 
-# Third-party benchmark app binaries and golden-test failure artifacts
-benchmark aplikasi*/
+# --- Artefak rilis ---
+*.apk
+*.aab
 *.xapk
-fostifest_companion/test/failures/
+*.ipa
+*.zip
+
+# --- Benchmark pihak ketiga ---
+benchmark aplikasi*/

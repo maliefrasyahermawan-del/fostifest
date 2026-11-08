@@ -1,5 +1,7 @@
 # KONTEKS APLIKASI LARAS UMKM
 
+> **Status dokumen:** sebagian isi dokumen ini bersifat historis dan belum diperbarui setelah penyegaran desain LARAS. Rujukan ke file kasir/POS, QRIS, atau komponen lama di bawah tidak lagi menggambarkan kode saat ini. Untuk kondisi terkini, gunakan [README utama](../README.md), [DESIGN.md](../DESIGN.md), dan [CHANGELOG.md](../CHANGELOG.md).
+
 Dokumen ini adalah konteks teknis dan produk lengkap untuk aplikasi **LARAS UMKM**
 (karya **FOSTIFEST 2026 — Software Development Competition**). Tujuannya agar siapa pun
 (developer, juri, atau AI coding assistant) bisa memahami tujuan, fitur, arsitektur, alur
@@ -497,7 +499,7 @@ ringan dan bisa dipakai UMKM tanpa koneksi stabil.
   (agar dependency ML Kit tetap lengkap di runtime)
 - **Catatan**: release masih memakai `signingConfigs.getByName("debug")`
   (belum signing key produksi).
-- APK tersedia: `FOSTIFEST-2026-arm64-release.apk`.
+- APK release tidak disimpan di repositori. Bangun dengan perintah pada bagian 7.2, lalu bagikan melalui rilis atau kanal terpisah.
 
 ### 6.3 Web
 - `web/index.html` berjudul **LARAS UMKM Preview**, ada layar loading
@@ -552,9 +554,12 @@ flutter analyze
 Test yang tersedia:
 - `test/app_test.dart` — header beranda, pencarian fitur, tombol/tema,
   legalitas, catatan/laporan, registrasi & login, kalender, asisten, edit profil.
-- `test/cashier_flow_test.dart` — alur kasir.
-- `test/barcode_scan_test.dart` — scanner.
-- `test/proposal_capture_test.dart` — capture tampilan untuk proposal.
+- `test/adaptive_design_test.dart` — tata letak 360–414 px, teks besar, dan mode gelap.
+- `test/form_layout_test.dart` — formulir transaksi, produk, dan supplier.
+- `test/price_simulation_test.dart` — simulasi harga, penyimpanan, dan pembukaan ulang.
+- `test/legalitas_rules_test.dart` — aturan dan rekomendasi legalitas.
+- `test/supplier_test.dart` — alur supplier dan pembelian bahan.
+- `test/proposal_capture_test.dart` — golden screenshot untuk proposal.
 
 ---
 
