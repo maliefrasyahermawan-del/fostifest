@@ -9,7 +9,6 @@ LARAS UMKM adalah aplikasi pembukuan dan analisis margin berbasis harga bahan ba
 
 ![Arsitektur Sistem LARAS UMKM](arsitektur-sistem-laras.jpg)
 
-*Gambar 3 dari Proposal LARAS UMKM FOSTIFEST 2026, halaman 12.*
 
 Arsitektur aplikasi menggunakan pendekatan **client-side**: antarmuka Flutter meneruskan aksi pengguna ke logika aplikasi, lalu data dibaca dan ditulis melalui penyimpanan lokal (`SharedPreferences` berbasis JSON). Komponen pada perangkat digunakan untuk OCR foto catatan serta pembuatan dan pembagian laporan PDF. Aplikasi tidak memerlukan server atau API eksternal untuk fungsi intinya.
 
@@ -17,7 +16,6 @@ Arsitektur aplikasi menggunakan pendekatan **client-side**: antarmuka Flutter me
 
 ![Alur Rantai Biaya LARAS UMKM](alur-rantai-biaya-laras.jpg)
 
-*Gambar 2 dari Proposal LARAS UMKM FOSTIFEST 2026, halaman 8.*
 
 Harga bahan dari supplier menjadi masukan untuk resep dan modal produk. Ketika harga bahan berubah, aplikasi menghitung ulang modal produk berbasis resep dan menampilkan **dampak pada modal serta margin**. Pengguna dapat meninjau harga dan margin lalu mencoba simulasi harga jual. Jika harga bahan tidak berubah, modal tetap. **Margin produk adalah margin kotor**, sedangkan laporan kas bulanan dihitung dari catatan pemasukan dan pengeluaran; penjualan belum ditautkan langsung ke produk.
 
