@@ -1,147 +1,69 @@
 # LARAS UMKM
 
-> **Laporan Arus Kas dan Analisis Usaha**
->
-> *Kenali usahamu, tentukan arah.*
+**Laporan Arus Kas dan Analisis Usaha**  
+*Kenali usahamu, tentukan arah.*
 
-LARAS UMKM adalah aplikasi Android offline-first untuk usaha mikro produksi. LARAS menghubungkan harga bahan dari supplier, modal produk, margin, arus kas, stok, dan laporan usaha sehingga pemilik dapat menetapkan harga berdasarkan data yang mereka catat sendiri.
+LARAS UMKM adalah aplikasi pembukuan dan analisis margin berbasis harga bahan baku untuk usaha mikro produksi. Aplikasi dibangun menggunakan **Flutter/Dart** untuk Android, dengan versi web sebagai pratinjau demonstrasi. Fungsi inti dirancang **offline-first**, tanpa backend, dan menyimpan data usaha secara lokal di perangkat.
 
-LARAS bukan aplikasi pembayaran. MVP ini tidak memiliki QRIS, payment link, POS/kasir, piutang, kredit, maupun integrasi rekening bank.
+## Arsitektur Sistem
 
-## Masalah yang diselesaikan
+![Arsitektur Sistem LARAS UMKM](arsitektur-sistem-laras.jpg)
 
-| Tantangan pemilik usaha | Dampak | Jawaban LARAS |
-| --- | --- | --- |
-| Catatan pemasukan dan pengeluaran tersebar | Laba serta arus kas tidak terlihat | Pencatatan transaksi, kategori kas, dan laporan laba-rugi |
-| Harga bahan naik tanpa dihitung ulang | Margin menipis tanpa disadari | Supplier, riwayat harga bahan, resep, dan modal otomatis |
-| Harga jual hanya berdasarkan perkiraan | Produk berisiko dijual terlalu murah | Analisis margin dan simulasi harga jual |
-| Stok serta administrasi belum tertata | Belanja bahan dan legalitas terlambat | Stok minimum, checklist legalitas, dan laporan PDF |
+*Gambar 3 dari Proposal LARAS UMKM FOSTIFEST 2026, halaman 12.*
 
-## MVP yang sudah tersedia
+Arsitektur aplikasi menggunakan pendekatan **client-side**: antarmuka Flutter meneruskan aksi pengguna ke logika aplikasi, lalu data dibaca dan ditulis melalui penyimpanan lokal (`SharedPreferences` berbasis JSON). Komponen pada perangkat digunakan untuk OCR foto catatan serta pembuatan dan pembagian laporan PDF. Aplikasi tidak memerlukan server atau API eksternal untuk fungsi intinya.
 
-- **Beranda usaha**: ringkasan pemasukan, pengeluaran, estimasi laba, tren, dan tindakan cepat.
-- **Keuangan**: catatan pemasukan/pengeluaran, kategori kas, riwayat, pencarian, dan laporan laba-rugi.
-- **Supplier & bahan**: kontak pemasok, riwayat harga bahan, dan pencatatan pembelian bahan.
-- **Produk, resep & stok**: katalog produk, stok minimum, komposisi bahan, upah, serta overhead.
-- **Harga & Margin**: modal otomatis, dampak perubahan harga bahan, target margin, dan simulasi harga jual.
-- **Pelanggan**: data kontak dan catatan hubungan pelanggan tanpa piutang.
-- **Laporan & legalitas**: rangkuman usaha, ekspor PDF, dan checklist NIB, merek/P-IRT, serta halal.
-- **Bantuan & privasi**: panduan penggunaan, profil usaha, mode gelap, dan penjelasan data lokal.
+## Alur Rantai Biaya dan Perubahan Harga Bahan
 
-## Alur nilai utama
+![Alur Rantai Biaya LARAS UMKM](alur-rantai-biaya-laras.jpg)
 
-```mermaid
-flowchart LR
-    A[Supplier mengubah harga bahan] --> B[Harga bahan dan riwayat diperbarui]
-    B --> C[Modal resep dihitung ulang]
-    C --> D[Margin produk berubah]
-    D --> E{Keputusan pemilik usaha}
-    E -->|Atur harga jual| F[Simulasi target margin]
-    E -->|Evaluasi biaya| G[Pilih bahan atau supplier]
-    F --> H[Harga dan margin lebih terukur]
-    G --> H
-```
+*Gambar 2 dari Proposal LARAS UMKM FOSTIFEST 2026, halaman 8.*
 
-## Arsitektur aplikasi
+Harga bahan dari supplier menjadi masukan untuk resep dan modal produk. Ketika harga bahan berubah, aplikasi menghitung ulang modal produk berbasis resep dan menampilkan **dampak pada modal serta margin**. Pengguna dapat meninjau harga dan margin lalu mencoba simulasi harga jual. Jika harga bahan tidak berubah, modal tetap. **Margin produk adalah margin kotor**, sedangkan laporan kas bulanan dihitung dari catatan pemasukan dan pengeluaran; penjualan belum ditautkan langsung ke produk.
 
-LARAS memakai arsitektur monolit client-side. Seluruh fungsi inti diproses di perangkat, tanpa backend atau panggilan API eksternal.
+## Fitur MVP
 
-```mermaid
-flowchart TB
-    UI[Flutter UI<br/>Beranda • Keuangan • Supplier • Produk • Margin • Laporan] --> STATE[State layar & navigasi<br/>validasi, loading, empty, error]
-    STATE --> DOMAIN[Logika domain<br/>modal resep • dampak harga • margin • laba-rugi]
-    DOMAIN --> REPO[LarasLocalRepository<br/>read/write data]
-    REPO --> STORE[(SharedPreferences + JSON<br/>penyimpanan lokal)]
-    UI --> PLUGINS[Plugin perangkat<br/>OCR foto • gambar • ekspor/cetak PDF]
-    PLUGINS --> STATE
-```
-
-## ERD konseptual MVP
-
-```mermaid
-erDiagram
-    BUSINESS_PROFILE ||--o{ CASH_TRANSACTION : mencatat
-    CASH_CATEGORY ||--o{ CASH_TRANSACTION : mengelompokkan
-    CUSTOMER o|--o{ CASH_TRANSACTION : referensi_opsional
-    PRODUCT_CATEGORY ||--o{ PRODUCT : mengelompokkan
-    PRODUCT ||--o{ STOCK_MOVEMENT : memiliki_riwayat
-    SUPPLIER ||--o{ MATERIAL : menyediakan
-    PRODUCT ||--o{ RECIPE_LINE : memiliki_resep
-    MATERIAL ||--o{ RECIPE_LINE : digunakan_oleh
-
-    BUSINESS_PROFILE {
-      string name
-      string location
-      string businessCategory
-    }
-    CASH_CATEGORY {
-      string id
-      string name
-      string type
-    }
-    CASH_TRANSACTION {
-      string id
-      string type
-      number amount
-      date recordedAt
-      string paymentNote
-    }
-    CUSTOMER {
-      string id
-      string name
-      string phone
-    }
-    PRODUCT_CATEGORY {
-      string id
-      string name
-    }
-    PRODUCT {
-      string id
-      string name
-      number sellingPrice
-      number currentStock
-      number minimumStock
-    }
-    STOCK_MOVEMENT {
-      string id
-      string type
-      number quantity
-      date recordedAt
-    }
-    SUPPLIER {
-      string id
-      string name
-      string contact
-    }
-    MATERIAL {
-      string id
-      string name
-      number latestPrice
-      date priceUpdatedAt
-    }
-    RECIPE_LINE {
-      string id
-      number quantity
-      number unitCost
-    }
-```
-
-## Batasan MVP
-
-- Data disimpan lokal melalui `SharedPreferences`; belum ada cloud sync, multi-pengguna, atau pemulihan otomatis.
-- Metode pembayaran di pencatatan pemasukan hanya catatan manual, bukan verifikasi atau proses pembayaran.
-- Margin adalah margin kotor; laporan dan estimasi pajak merupakan bantuan pengelolaan, bukan perhitungan pajak resmi.
-
-## Struktur repository
-
-- [`fostifest_companion/`](fostifest_companion): kode aplikasi Flutter.
-- [`fostifest_companion/README.md`](fostifest_companion/README.md): dokumentasi teknis aplikasi dan instruksi build.
-- [`GUIDEBOOK-SOFTWARE-DEVELOPMENT-FOSTIFEST-2026.md`](GUIDEBOOK-SOFTWARE-DEVELOPMENT-FOSTIFEST-2026.md): konteks kompetisi.
+- Dashboard omzet, estimasi laba, tren, dan produk terlaris.
+- Pembukuan transaksi melalui input manual, chat, atau OCR foto catatan.
+- Pelanggan, produk, stok minimum, kategori, dan laporan laba-rugi.
+- Tidak memproses pembayaran digital, QRIS, atau payment gateway.
+- Kalender transaksi dan laporan laba-rugi yang dapat dibagikan sebagai PDF.
+- Daftar legalitas UMKM untuk mencatat status dokumen usaha.
+- Profil usaha lokal serta asisten Laras.
+- **Manage Cerdas**: layar ikon fitur manajemen usaha (Keuangan, Pelanggan, Produk & Stok, Supplier, Harga & Margin, Laporan, Catat Transaksi, Legalitas, Asisten Laras).
+- **Harga & Margin**: margin tiap produk, penjelasan penyebab margin, dan pengaturan harga jual dengan target margin.
+- **Simulasi harga produk**: buka Manage Cerdas → Harga & Margin → Simulasi harga produk (juga tersedia di pencarian dan sidebar). Harga jual Rp0–Rp10 juta dengan slider dan input rupiah tepat; jumlah produk 1–1 juta. Biaya per produk berasal dari bahan supplier atau input manual, tenaga kerja, dan biaya lainnya. Menampilkan untung/rugi/impas, margin terhadap harga jual, dan proyeksi total jika seluruh jumlah terjual.
+- **Simpanan simulasi**: maksimal 10 skenario di perangkat/browser yang sama. Simpan, buka ulang, atau hapus melalui ikon bookmark. Rincian bahan/harga/supplier disalin saat disimpan; perubahan supplier selanjutnya tidak mengubah skenario lama. Percobaan tidak mengubah harga produk, persediaan, atau pembukuan.
+- **Supplier**: daftar pemasok bahan baku, kontak, harga bahan, riwayat harga, penanda harga termurah, dan pencatatan pembelian bahan ke Keuangan.
+- **Resep & modal otomatis**: modal produk dihitung dari harga bahan supplier, upah, dan overhead. Kenaikan harga bahan memperbarui modal produk dan menampilkan dampaknya ke margin.
+- Sidebar fitur dan data demo usaha batik (Batik Sekar) yang terisi saat masuk dengan akun demo atau tamu.
 
 ## Menjalankan aplikasi
 
 ```powershell
-cd fostifest_companion
 flutter pub get
 flutter run
 ```
+
+## Build APK Android
+
+```powershell
+flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/symbols/arm64
+```
+
+APK ARM64 teroptimasi juga tersedia sebagai `FOSTIFEST-2026-arm64-release.apk`.
+
+## Preview web lokal
+
+Klik `Buka Preview LARAS.cmd` di folder induk (lihat `CARA PREVIEW LARAS.md`). Preview tersedia di `http://127.0.0.1:43827/`.
+
+## Dokumentasi
+
+- `KONTEKS-LARAS.md`: konteks produk dan teknis lengkap.
+- `LARAS_IMPLEMENTATION_REPORT.md`: laporan implementasi.
+
+## Penyimpanan simulasi
+
+Proyek ini belum menggunakan server API atau database jarak jauh. Logika simulasi ada di `lib/price_simulation.dart`, terpisah dari antarmuka, memakai SharedPreferences seperti data usaha yang sudah ada. Kunci khusus `laras_price_simulations_v1` menyimpan JSON skenario lengkap. Penyimpanan menolak skenario ke-11, mengantre operasi simpan/hapus, memvalidasi isi, dan tidak menimpa data yang gagal dibaca. Data tidak tersinkron antarperangkat dan dapat hilang bila data situs/peramban dihapus.
+
+Rumus: biaya produksi = pembulatan jumlah (kuantitas bahan × harga satuan) + tenaga kerja + biaya lainnya per produk; untung/rugi per produk = harga jual − biaya produksi; margin = untung/rugi ÷ harga jual × 100%; proyeksi total = untung/rugi per produk × jumlah terjual. Margin ditampilkan “—” jika harga jual Rp0. Semua biaya bahan dan biaya tambahan adalah biaya untuk satu produk. Perkiraan tidak memasukkan biaya di luar rincian yang diisi pengguna.
