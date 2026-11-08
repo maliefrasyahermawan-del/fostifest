@@ -30,8 +30,9 @@ Future<void> openSupplierTab(WidgetTester tester) async {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('tab Supplier menggantikan Legalitas di navigasi bawah',
-      (tester) async {
+  testWidgets('tab Supplier menggantikan Legalitas di navigasi bawah', (
+    tester,
+  ) async {
     await enterDemo(tester);
     expect(find.text('Supplier'), findsOneWidget);
     expect(find.text('Legalitas'), findsNothing);
@@ -42,8 +43,9 @@ void main() {
     expect(find.text('Toko Warna Batik Solo'), findsOneWidget);
   });
 
-  testWidgets('detail supplier menampilkan bahan dan penanda termurah',
-      (tester) async {
+  testWidgets('detail supplier menampilkan bahan dan penanda termurah', (
+    tester,
+  ) async {
     await openSupplierTab(tester);
     await tester.tap(find.byKey(const Key('supplier_sup-cv')));
     await tester.pumpAndSettle();
@@ -56,37 +58,41 @@ void main() {
     await tester.tap(find.byKey(const Key('add_supplier')));
     await tester.pumpAndSettle();
     await tester.enterText(
-        find.byKey(const Key('supplier_name')), 'Toko Benang Sari');
+      find.byKey(const Key('supplier_name')),
+      'Toko Benang Sari',
+    );
     await tester.tap(find.text('Simpan'));
     await tester.pumpAndSettle();
     expect(find.text('Toko Benang Sari'), findsOneWidget);
   });
 
   testWidgets(
-      'harga bahan naik memperbarui modal produk dan menampilkan dampak',
-      (tester) async {
-    await openSupplierTab(tester);
-    await tester.tap(find.byKey(const Key('supplier_sup-klewer')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('material_mat-mori-klewer')));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('material_price')), '30000');
-    await tester.tap(find.text('Simpan'));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('impact_dialog')), findsOneWidget);
-    expect(find.textContaining('naik 7%'), findsOneWidget);
+    'harga bahan naik memperbarui modal produk dan menampilkan dampak',
+    (tester) async {
+      await openSupplierTab(tester);
+      await tester.tap(find.byKey(const Key('supplier_sup-klewer')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('material_mat-mori-klewer')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('material_price')), '30000');
+      await tester.tap(find.text('Simpan'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('impact_dialog')), findsOneWidget);
+      expect(find.textContaining('naik 7%'), findsOneWidget);
 
-    final prefs = await SharedPreferences.getInstance();
-    final products = jsonDecode(prefs.getString('laras_products_v1')!) as List;
-    final kawung = products.firstWhere((p) => p['sku'] == 'BCP-001') as Map;
-    // 150.000 + 2,3 m x Rp2.000 kenaikan harga mori
-    expect(kawung['cost'], 154600);
-    final tulis = products.firstWhere((p) => p['sku'] == 'BTL-001') as Map;
-    // resep batik tulis memakai 2,3 m mori yang sama
-    expect(tulis['cost'], 524600);
-    final sutra = products.firstWhere((p) => p['sku'] == 'SLD-001') as Map;
-    expect(sutra['cost'], 95000); // tidak memakai mori
-  });
+      final prefs = await SharedPreferences.getInstance();
+      final products =
+          jsonDecode(prefs.getString('laras_products_v1')!) as List;
+      final kawung = products.firstWhere((p) => p['sku'] == 'BCP-001') as Map;
+      // 150.000 + 2,3 m x Rp2.000 kenaikan harga mori
+      expect(kawung['cost'], 154600);
+      final tulis = products.firstWhere((p) => p['sku'] == 'BTL-001') as Map;
+      // resep batik tulis memakai 2,3 m mori yang sama
+      expect(tulis['cost'], 524600);
+      final sutra = products.firstWhere((p) => p['sku'] == 'SLD-001') as Map;
+      expect(sutra['cost'], 95000); // tidak memakai mori
+    },
+  );
 
   testWidgets('beli bahan mencatat pengeluaran', (tester) async {
     await openSupplierTab(tester);
@@ -103,24 +109,36 @@ void main() {
     expect(expenses.first['amount'], 90000);
   });
 
-  testWidgets('resep produk menghitung modal otomatis dari bahan supplier',
-      (tester) async {
+  testWidgets('resep produk menghitung modal otomatis dari bahan supplier', (
+    tester,
+  ) async {
     await enterDemo(tester);
     await tester.tap(find.text('Manage Cerdas'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('manage_margin')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Batik Cap Kawung 2m'), 200,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Batik Cap Kawung 2m'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Batik Cap Kawung 2m'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Batik Cap Kawung 2m'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.byKey(const Key('open_recipe')), 300,
-        scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('open_recipe')),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.tap(find.byKey(const Key('open_recipe')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recipe_page')), findsOneWidget);
     expect(find.text('Rp150.000'), findsWidgets);
-    expect(tester.widget<Text>(find.byKey(const Key('recipe_total'))).data,
-        'Rp150.000');
+    expect(
+      tester.widget<Text>(find.byKey(const Key('recipe_total'))).data,
+      'Rp150.000',
+    );
   });
 }

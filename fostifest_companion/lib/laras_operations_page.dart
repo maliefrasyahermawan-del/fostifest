@@ -1,9 +1,15 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'laras_design.dart';
+import 'laras_components.dart';
+import 'laras_fintech_widgets.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'product_margin_page.dart';
+import 'price_simulation_page.dart';
 
 class LarasLocalRepository {
   static const income = 'laras_transactions_v1';
@@ -28,7 +34,9 @@ class LarasLocalRepository {
       throw StateError('Data belum tersimpan di perangkat.');
     }
     await prefs.setString(
-        'laras_last_updated_at', DateTime.now().toIso8601String());
+      'laras_last_updated_at',
+      DateTime.now().toIso8601String(),
+    );
   }
 
   String id() => DateTime.now().microsecondsSinceEpoch.toString();
@@ -74,7 +82,6 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
   List<Map<String, dynamic>> get _customers => _data[2];
   List<Map<String, dynamic>> get _products => _data[3];
   List<Map<String, dynamic>> get _categories => _data[4];
-  List<Map<String, dynamic>> get _productCategories => _data[5];
 
   @override
   void initState() {
@@ -92,19 +99,21 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
       try {
         sales = await _repo.read('laras_sales_v1');
       } catch (_) {}
-      if (mounted)
+      if (mounted) {
         setState(() {
           _data = next;
           _sales = sales;
           _loading = false;
           _error = null;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = 'Data lokal belum dapat dibaca.';
         });
+      }
     }
   }
 
@@ -137,7 +146,7 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
                 'margin' => 'Harga & Margin',
                 _ => 'Keuangan',
               },
-              style: const TextStyle(fontWeight: FontWeight.w900)),
+              style: const TextStyle(fontWeight: FontWeight.w600)),
         ),
         body: _loading
             ? const Center(child: CircularProgressIndicator())
@@ -151,54 +160,54 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
       );
 
   Widget _finance() => _Page(
-          title: 'Keuangan',
-          subtitle:
-              'Catat arus kas usaha secara manual. Metode pembayaran hanya menjadi catatan, bukan layanan pembayaran.',
-          action: 'Catat pemasukan',
-          onAction: () => _cashForm(true),
-          children: [
-            _metrics([
-              [
-                'Pemasukan',
-                larasRupiah(_sum(_income)),
-                Icons.south_west_rounded
-              ],
-              [
-                'Pengeluaran',
-                larasRupiah(_sum(_expenses)),
-                Icons.north_east_rounded
-              ]
-            ]),
-            _title('Riwayat transaksi'),
-            ..._transactions(),
-            _title('Kategori kas'),
-            _chips(_categories, 4, 'Tambah kategori'),
-          ]);
+        title: 'Keuangan',
+        subtitle:
+            'Catat arus kas usaha secara manual. Metode pembayaran hanya menjadi catatan, bukan layanan pembayaran.',
+        action: 'Catat pemasukan',
+        onAction: () => _cashForm(true),
+        children: [
+          _metrics([
+            ['Pemasukan', larasRupiah(_sum(_income)), Icons.south_west_rounded],
+            [
+              'Pengeluaran',
+              larasRupiah(_sum(_expenses)),
+              Icons.north_east_rounded
+            ],
+          ]),
+          _title('Riwayat transaksi'),
+          ..._transactions(),
+          _title('Kategori kas'),
+          _chips(_categories, 4, 'Tambah kategori'),
+        ],
+      );
   List<Widget> _transactions() {
     final rows = [
       ..._income.map((e) => {...e, 'type': 'Pemasukan', 'when': e['date']}),
-      ..._expenses
-          .map((e) => {...e, 'type': 'Pengeluaran', 'when': e['createdAt']})
+      ..._expenses.map(
+        (e) => {...e, 'type': 'Pengeluaran', 'when': e['createdAt']},
+      ),
     ]..sort((a, b) => '${b['when']}'.compareTo('${a['when']}'));
-    if (rows.isEmpty)
+    if (rows.isEmpty) {
       return [
         const _Empty(
-            'Belum ada transaksi. Mulai dari pemasukan atau pengeluaran pertama.')
+          'Belum ada transaksi. Mulai dari pemasukan atau pengeluaran pertama.',
+        ),
       ];
+    }
     return rows
         .take(30)
-        .map((e) => Card(
-            child: ListTile(
-                leading: Icon(
-                    e['type'] == 'Pemasukan'
-                        ? Icons.add_circle_outline
-                        : Icons.remove_circle_outline,
-                    color: const Color(0xFF14935A)),
-                title: Text('${e['name'] ?? 'Transaksi'}'),
-                subtitle: Text(
-                    '${e['type']} · ${_date('${e['when']}')} · ${e['category'] ?? 'Tanpa kategori'}'),
-                trailing: Text(larasRupiah((e['amount'] as num?) ?? 0),
-                    style: const TextStyle(fontWeight: FontWeight.w800)))))
+        .map(
+          (e) => LarasAmountRow(
+            title: '${e['name'] ?? 'Transaksi'}',
+            subtitle:
+                '${e['type']} · ${_date('${e['when']}')} · ${e['category'] ?? 'Tanpa kategori'}',
+            amount: larasRupiah((e['amount'] as num?) ?? 0),
+            outgoing: e['type'] != 'Pemasukan',
+            icon: e['type'] == 'Pemasukan'
+                ? Icons.south_west_rounded
+                : Icons.north_east_rounded,
+          ),
+        )
         .toList();
   }
 
@@ -211,18 +220,28 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
         children: [
           if (_customers.isEmpty)
             const _Empty(
-                'Belum ada pelanggan. Tambahkan kontak pelanggan pertama.'),
-          ..._customers.map((e) => Card(
-                  child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.person)),
+              'Belum ada pelanggan. Tambahkan kontak pelanggan pertama.',
+            ),
+          ..._customers.map(
+            (e) => Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: LarasDesign.soft(context),
+                  foregroundColor: LarasDesign.accent(context),
+                  child: const Icon(Icons.person_outline_rounded),
+                ),
                 title: Text('${e['name']}'),
                 subtitle: Text('${e['detail'] ?? 'Tanpa kontak'}'),
                 onTap: () => _customerForm(initial: e),
                 trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Hapus pelanggan',
-                    onPressed: () => _deleteCustomer(e)),
-              ))),
+                  icon: const Icon(Icons.delete_outline),
+                  tooltip: 'Hapus pelanggan',
+                  onPressed: () => _deleteCustomer(e),
+                ),
+              ),
+            ),
+          ),
         ],
       );
 
@@ -243,192 +262,234 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
 
   Widget _margins() {
     final list = _productMargins;
-    if (list.isEmpty) {
-      return const _Empty(
-          'Belum ada produk. Tambahkan produk dan harga modalnya agar margin dapat dianalisis.');
-    }
-    final average =
-        list.fold<double>(0, (s, e) => s + e.marginPercent) / list.length;
+    final average = list.isEmpty
+        ? 0.0
+        : list.fold<double>(0, (s, e) => s + e.marginPercent) / list.length;
     final weak = list.where((e) => e.marginPercent < 30).length;
     return RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-            children: [
-              const Text('Harga & margin produk',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              const SizedBox(height: 4),
-              const Text(
-                  'Margin = harga jual dikurangi harga modal. Pilih produk untuk melihat penyebab margin dan mengatur harga.',
-                  style: TextStyle(color: Color(0xFF5F766C), height: 1.4)),
-              const SizedBox(height: 14),
-              _metrics([
-                [
-                  'Rata-rata margin',
-                  '${average.toStringAsFixed(1)}%',
-                  Icons.percent_rounded
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+        children: [
+          const Text(
+            'Harga & margin produk',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Margin = harga jual dikurangi harga modal. Pilih produk untuk melihat penyebab margin dan mengatur harga.',
+            style: TextStyle(
+              color: LarasDesign.secondary(context),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Card(
+            margin: const EdgeInsets.only(bottom: 20),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.tune_rounded, color: LarasDesign.accent(context)),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Temukan harga yang pas',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Coba harga jual dan biaya produksi. Lihat perkiraan untung atau rugi sebelum mengambil keputusan.',
+                    style: TextStyle(
+                      color: LarasDesign.secondary(context),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      key: const Key('open_price_simulation'),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PriceSimulationPage(),
+                        ),
+                      ),
+                      icon: const Icon(Icons.insights_outlined),
+                      label: const Text('Simulasi harga produk'),
+                    ),
+                  ),
                 ],
-                ['Produk dipantau', '${list.length}', Icons.category_outlined],
-                [
-                  'Margin tertinggi',
-                  '${list.last.marginPercent.toStringAsFixed(0)}%',
-                  Icons.trending_up_rounded
-                ],
-                ['Margin < 30%', '$weak produk', Icons.warning_amber_rounded],
-              ]),
-              _title('Margin per produk'),
-              ...list.map((e) => Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    onTap: () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => ProductMarginPage(
-                                  product: e.product,
-                                  unitsSold: e.unitsSold,
-                                  averageMargin: average)));
-                      await _load();
-                    },
-                    title: Text(e.name,
-                        style: const TextStyle(fontWeight: FontWeight.w800)),
-                    subtitle: Text(
-                        'Jual ${larasRupiah(e.price)} · Modal ${larasRupiah(e.cost)} · Margin ${larasRupiah(e.margin)}'),
-                    trailing: MarginBadge(percent: e.marginPercent),
-                  ))),
-            ]));
+              ),
+            ),
+          ),
+          if (list.isEmpty)
+            const Text(
+              'Belum ada produk untuk analisis margin. Kamu tetap bisa mencoba simulasi dengan biaya manual.',
+            ),
+          if (list.isNotEmpty)
+            _metrics([
+              [
+                'Rata-rata margin',
+                '${average.toStringAsFixed(1)}%',
+                Icons.percent_rounded,
+              ],
+              ['Produk dipantau', '${list.length}', Icons.category_outlined],
+              [
+                'Margin tertinggi',
+                '${list.last.marginPercent.toStringAsFixed(0)}%',
+                Icons.trending_up_rounded,
+              ],
+              ['Margin < 30%', '$weak produk', Icons.warning_amber_rounded],
+            ]),
+          _title('Margin per produk'),
+          ...list.map(
+            (e) => Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ProductMarginPage(
+                        product: e.product,
+                        unitsSold: e.unitsSold,
+                        averageMargin: average,
+                      ),
+                    ),
+                  );
+                  await _load();
+                },
+                title: Text(
+                  e.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  'Jual ${larasRupiah(e.price)} · Modal ${larasRupiah(e.cost)} · Margin ${larasRupiah(e.margin)}',
+                ),
+                trailing: MarginBadge(percent: e.marginPercent),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _title(String label) => Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
-      child: Text(label,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900)));
-  Widget _action(String label, IconData icon, VoidCallback onTap) => SizedBox(
-      width: 150,
-      child: OutlinedButton.icon(
-          onPressed: onTap,
-          icon: Icon(icon, size: 18),
-          label: Text(label, textAlign: TextAlign.center),
-          style: OutlinedButton.styleFrom(
-              padding:
-                  const EdgeInsets.symmetric(vertical: 12, horizontal: 8))));
-  Widget _metrics(List<List<Object>> entries) => GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      childAspectRatio: 1.65,
-      crossAxisSpacing: 10,
-      mainAxisSpacing: 10,
-      children: entries
-          .map((e) => DecoratedBox(
-              decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Color(0xFF1FB36F),
-                        Color(0xFF45C98E),
-                        Color(0xFFBFF0D6)
-                      ],
-                      stops: [
-                        0,
-                        .65,
-                        1
-                      ]),
-                  borderRadius: BorderRadius.circular(20)),
-              child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(e[2] as IconData,
-                            color: const Color(0xFF123126), size: 20),
-                        const SizedBox(height: 5),
-                        Text(e[0] as String,
-                            style: const TextStyle(
-                                color: Color(0xFF123126), fontSize: 11)),
-                        FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(e[1] as String,
-                                style: const TextStyle(
-                                    color: Color(0xFF123126),
-                                    fontWeight: FontWeight.w900)))
-                      ]))))
-          .toList());
+        padding: const EdgeInsets.only(top: 20, bottom: 8),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+      );
+  Widget _metrics(List<List<Object>> entries) => LarasAdaptivePair(
+        children: [
+          for (var i = 0; i < entries.length; i++)
+            LarasDataCard(
+              label: entries[i][0] as String,
+              value: entries[i][1] as String,
+              icon: entries[i][2] as IconData,
+              highlight: i == 0,
+            ),
+        ],
+      );
   Widget _chips(List<Map<String, dynamic>> list, int index, String label) =>
-      Wrap(spacing: 8, runSpacing: 6, children: [
-        ...list.map((e) => InputChip(
-            label: Text('${e['name']}'),
-            onDeleted: () async {
-              final next = [...list]..remove(e);
-              await _save(index, next);
-            })),
-        ActionChip(
+      Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          ...list.map(
+            (e) => InputChip(
+              label: Text('${e['name']}'),
+              onDeleted: () async {
+                final next = [...list]..remove(e);
+                await _save(index, next);
+              },
+            ),
+          ),
+          ActionChip(
             avatar: const Icon(Icons.add, size: 16),
             label: Text(label),
-            onPressed: () => _categoryForm(index, label))
-      ]);
+            onPressed: () => _categoryForm(index, label),
+          ),
+        ],
+      );
 
   Future<void> _cashForm(bool income) async {
     final name = TextEditingController();
     final amount = TextEditingController();
-    final category =
-        TextEditingController(text: income ? 'Penjualan' : 'Operasional');
+    final category = TextEditingController(
+      text: income ? 'Penjualan' : 'Operasional',
+    );
     final form = GlobalKey<FormState>();
     final r = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (c) => AlertDialog(
-                title: Text(income ? 'Catat pemasukan' : 'Catat pengeluaran'),
-                content: Form(
-                    key: form,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      TextFormField(
-                          controller: name,
-                          decoration: const InputDecoration(
-                              labelText: 'Nama transaksi'),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Nama transaksi wajib diisi'
-                              : null),
-                      TextFormField(
-                          controller: amount,
-                          keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: 'Nominal (Rp)'),
-                          validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
-                              ? 'Nominal harus lebih dari nol'
-                              : null),
-                      TextFormField(
-                          controller: category,
-                          decoration:
-                              const InputDecoration(labelText: 'Kategori')),
-                      const SizedBox(height: 8),
-                      const Text(
-                          'Metode pembayaran dicatat manual: tunai, transfer bank, atau e-wallet.',
-                          style:
-                              TextStyle(fontSize: 12, color: Color(0xFF5F766C)))
-                    ])),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(c),
-                      child: const Text('Batal')),
-                  FilledButton(
-                      onPressed: () {
-                        if (form.currentState!.validate())
-                          Navigator.pop(c, {
-                            'id': _repo.id(),
-                            'name': name.text.trim(),
-                            'amount': int.parse(amount.text),
-                            'category': category.text.trim(),
-                            'method': 'Tunai',
-                            'date': DateTime.now().toIso8601String(),
-                            'createdAt': DateTime.now().toIso8601String(),
-                            'source': 'Input manual'
-                          });
-                      },
-                      child: const Text('Simpan'))
-                ]));
+      context: context,
+      builder: (c) => AlertDialog(
+        scrollable: true,
+        title: Text(income ? 'Catat pemasukan' : 'Catat pengeluaran'),
+        content: Form(
+          key: form,
+          child: Column(
+            spacing: 14,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Nama transaksi'),
+                validator: (v) => v == null || v.trim().isEmpty
+                    ? 'Nama transaksi wajib diisi'
+                    : null,
+              ),
+              TextFormField(
+                controller: amount,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Nominal (Rp)'),
+                validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
+                    ? 'Nominal harus lebih dari nol'
+                    : null,
+              ),
+              TextFormField(
+                controller: category,
+                decoration: const InputDecoration(labelText: 'Kategori'),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Metode pembayaran dicatat manual: tunai, transfer bank, atau e-wallet.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: LarasDesign.secondary(context),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                Navigator.pop(c, {
+                  'id': _repo.id(),
+                  'name': name.text.trim(),
+                  'amount': int.parse(amount.text),
+                  'category': category.text.trim(),
+                  'method': 'Tunai',
+                  'date': DateTime.now().toIso8601String(),
+                  'createdAt': DateTime.now().toIso8601String(),
+                  'source': 'Input manual',
+                });
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
     name.dispose();
     amount.dispose();
     category.dispose();
@@ -442,42 +503,53 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
     final detail = TextEditingController(text: '${initial?['detail'] ?? ''}');
     final form = GlobalKey<FormState>();
     final r = await showDialog<Map<String, dynamic>>(
-        context: context,
-        builder: (c) => AlertDialog(
-                title: Text(
-                    initial == null ? 'Tambah pelanggan' : 'Ubah pelanggan'),
-                content: Form(
-                    key: form,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      TextFormField(
-                          controller: name,
-                          decoration: const InputDecoration(
-                              labelText: 'Nama pelanggan'),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Nama wajib diisi'
-                              : null),
-                      TextFormField(
-                          controller: detail,
-                          decoration: const InputDecoration(
-                              labelText: 'Telepon, alamat, atau catatan'))
-                    ])),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(c),
-                      child: const Text('Batal')),
-                  FilledButton(
-                      onPressed: () {
-                        if (form.currentState!.validate())
-                          Navigator.pop(c, {
-                            'id': initial?['id'] ?? _repo.id(),
-                            'name': name.text.trim(),
-                            'detail': detail.text.trim(),
-                            'createdAt': initial?['createdAt'] ??
-                                DateTime.now().toIso8601String()
-                          });
-                      },
-                      child: const Text('Simpan'))
-                ]));
+      context: context,
+      builder: (c) => AlertDialog(
+        scrollable: true,
+        title: Text(initial == null ? 'Tambah pelanggan' : 'Ubah pelanggan'),
+        content: Form(
+          key: form,
+          child: Column(
+            spacing: 14,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: name,
+                decoration: const InputDecoration(labelText: 'Nama pelanggan'),
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? 'Nama wajib diisi' : null,
+              ),
+              TextFormField(
+                controller: detail,
+                decoration: const InputDecoration(
+                  labelText: 'Telepon, alamat, atau catatan',
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                Navigator.pop(c, {
+                  'id': initial?['id'] ?? _repo.id(),
+                  'name': name.text.trim(),
+                  'detail': detail.text.trim(),
+                  'createdAt':
+                      initial?['createdAt'] ?? DateTime.now().toIso8601String(),
+                });
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
     name.dispose();
     detail.dispose();
     if (r == null) return;
@@ -493,18 +565,23 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
 
   Future<void> _deleteCustomer(Map<String, dynamic> item) async {
     final yes = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-                title: Text('Hapus ${item['name']}?'),
-                content: const Text('Kontak ini akan dihapus dari perangkat.'),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text('Batal')),
-                  TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text('Hapus'))
-                ]));
+      context: context,
+      builder: (c) => AlertDialog(
+        scrollable: true,
+        title: Text('Hapus ${item['name']}?'),
+        content: const Text('Kontak ini akan dihapus dari perangkat.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
     if (yes == true) {
       final next = [..._customers]..remove(item);
       await _save(2, next);
@@ -514,52 +591,69 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
   Future<void> _categoryForm(int index, String label) async {
     final c = TextEditingController();
     final name = await showDialog<String>(
-        context: context,
-        builder: (x) => AlertDialog(
-                title: Text(label),
-                content: TextField(
-                    controller: c,
-                    autofocus: true,
-                    decoration:
-                        const InputDecoration(labelText: 'Nama kategori')),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(x),
-                      child: const Text('Batal')),
-                  FilledButton(
-                      onPressed: () => Navigator.pop(x, c.text.trim()),
-                      child: const Text('Tambah'))
-                ]));
+      context: context,
+      builder: (x) => AlertDialog(
+        scrollable: true,
+        title: Text(label),
+        content: TextField(
+          controller: c,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Nama kategori'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(x),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(x, c.text.trim()),
+            child: const Text('Tambah'),
+          ),
+        ],
+      ),
+    );
     c.dispose();
     if (name == null || name.isEmpty) return;
     await _save(index, [
       ..._data[index],
-      {'id': _repo.id(), 'name': name}
+      {'id': _repo.id(), 'name': name},
     ]);
   }
 }
 
 class _Page extends StatelessWidget {
-  const _Page(
-      {required this.title,
-      required this.subtitle,
-      required this.action,
-      required this.onAction,
-      required this.children});
+  const _Page({
+    required this.title,
+    required this.subtitle,
+    required this.action,
+    required this.onAction,
+    required this.children,
+  });
   final String title, subtitle, action;
   final VoidCallback onAction;
   final List<Widget> children;
   @override
-  Widget build(BuildContext context) =>
-      ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 100), children: [
-        Text(subtitle, style: const TextStyle(color: Color(0xFF5F766C))),
-        const SizedBox(height: 14),
-        FilledButton.icon(
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+        children: [
+          Text(
+            subtitle,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.6,
+              color: LarasDesign.secondary(context),
+            ),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
             onPressed: onAction,
             icon: const Icon(Icons.add),
-            label: Text(action)),
-        ...children
-      ]);
+            label: Text(action),
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      );
 }
 
 class _Empty extends StatelessWidget {
@@ -567,10 +661,13 @@ class _Empty extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.all(22),
-      child: Text(text,
+        padding: const EdgeInsets.all(22),
+        child: Text(
+          text,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFF5F766C))));
+          style: TextStyle(color: LarasDesign.secondary(context)),
+        ),
+      );
 }
 
 class _Retry extends StatelessWidget {
@@ -579,10 +676,15 @@ class _Retry extends StatelessWidget {
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) => Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.cloud_off_outlined, size: 42),
-        const SizedBox(height: 10),
-        Text(message),
-        TextButton(onPressed: onRetry, child: const Text('Coba lagi'))
-      ]));
+        child: Column(
+          spacing: 14,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 42),
+            const SizedBox(height: 10),
+            Text(message),
+            TextButton(onPressed: onRetry, child: const Text('Coba lagi')),
+          ],
+        ),
+      );
 }

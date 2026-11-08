@@ -15,6 +15,7 @@ dependencies:
   printing: ^5.13.4
   path_provider: ^2.1.5
   shared_preferences: ^2.3.2
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
@@ -26,3 +27,27 @@ flutter:
   assets:
     - assets/images/batik-store-avatar.jpg
     - assets/images/hero-store.jpg
+
+  fonts:
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/poppins/Poppins-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/poppins/Poppins-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/poppins/Poppins-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/poppins/Poppins-Bold.ttf
+          weight: 700
+    - family: PlusJakartaSans
+      fonts:
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 400
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 500
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 600
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 700
+        - asset: assets/fonts/PlusJakartaSans.ttf
+          weight: 800

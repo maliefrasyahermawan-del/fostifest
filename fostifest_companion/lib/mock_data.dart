@@ -1,14 +1,20 @@
 import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, dynamic> _line(
-        String id, String name, String unit, num qty, int price) =>
+  String id,
+  String name,
+  String unit,
+  num qty,
+  int price,
+) =>
     {
       'materialId': id,
       'name': name,
       'unit': unit,
       'qty': qty,
-      'unitPrice': price
+      'unitPrice': price,
     };
 
 /// Seed data lokal tanpa POS, piutang, QRIS, atau pembayaran digital.
@@ -22,8 +28,9 @@ Future<bool> seedBatikDemoData() async {
   final now = DateTime.now();
   final base = now.microsecondsSinceEpoch;
   Future<void> put(String key, Object value) async {
-    if (!await prefs.setString(key, jsonEncode(value)))
+    if (!await prefs.setString(key, jsonEncode(value))) {
       throw StateError('Data contoh gagal disimpan.');
+    }
   }
 
   await put('laras_products_v1', [
@@ -34,7 +41,7 @@ Future<bool> seedBatikDemoData() async {
       'price': 850000,
       'cost': 520000,
       'stock': 6,
-      'min': 3
+      'min': 3,
     },
     {
       'name': 'Batik Cap Kawung 2m',
@@ -51,7 +58,7 @@ Future<bool> seedBatikDemoData() async {
         _line('mat-naptol', 'Pewarna naptol', 'botol', 0.5, 45000),
       ],
       'stock': 24,
-      'min': 8
+      'min': 8,
     },
     {
       'name': 'Kemeja Batik Pria',
@@ -68,7 +75,7 @@ Future<bool> seedBatikDemoData() async {
         _line('mat-naptol', 'Pewarna naptol', 'botol', 0.3, 45000),
       ],
       'stock': 22,
-      'min': 8
+      'min': 8,
     },
     {
       'name': 'Dress Batik Wanita',
@@ -85,7 +92,7 @@ Future<bool> seedBatikDemoData() async {
         _line('mat-benang', 'Benang & kancing', 'set', 1, 6000),
       ],
       'stock': 4,
-      'min': 5
+      'min': 5,
     },
     {
       'name': 'Tas Tote Batik',
@@ -94,7 +101,7 @@ Future<bool> seedBatikDemoData() async {
       'price': 95000,
       'cost': 48000,
       'stock': 20,
-      'min': 8
+      'min': 8,
     },
   ]);
   await put('laras_customers_v1', [
@@ -102,19 +109,19 @@ Future<bool> seedBatikDemoData() async {
       'id': '${base + 1}',
       'name': 'Ibu Retno Wulandari',
       'detail': '0812-2345-1101 · Pelanggan tetap',
-      'createdAt': now.subtract(const Duration(days: 80)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 80)).toIso8601String(),
     },
     {
       'id': '${base + 2}',
       'name': 'CV Sinar Seragam',
       'detail': '0271-555-001 · Pelanggan instansi',
-      'createdAt': now.subtract(const Duration(days: 55)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 55)).toIso8601String(),
     },
     {
       'id': '${base + 3}',
       'name': 'Dinda Maharani',
       'detail': '0857-7788-9903 · Pelanggan online',
-      'createdAt': now.subtract(const Duration(days: 24)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 24)).toIso8601String(),
     },
   ]);
   await put('laras_transactions_v1', [
@@ -124,7 +131,7 @@ Future<bool> seedBatikDemoData() async {
       'amount': 4850000,
       'category': 'Penjualan',
       'date': now.subtract(const Duration(days: 2)).toIso8601String(),
-      'source': 'Input manual'
+      'source': 'Input manual',
     },
     {
       'id': '${base + 11}',
@@ -132,7 +139,7 @@ Future<bool> seedBatikDemoData() async {
       'amount': 6200000,
       'category': 'Pesanan usaha',
       'date': now.subtract(const Duration(days: 12)).toIso8601String(),
-      'source': 'Input manual'
+      'source': 'Input manual',
     },
     {
       'id': '${base + 12}',
@@ -140,7 +147,7 @@ Future<bool> seedBatikDemoData() async {
       'amount': 2100000,
       'category': 'Penjualan online',
       'date': now.subtract(const Duration(days: 19)).toIso8601String(),
-      'source': 'Input manual'
+      'source': 'Input manual',
     },
   ]);
   await put('laras_expenses_v1', [
@@ -150,7 +157,7 @@ Future<bool> seedBatikDemoData() async {
       'detail': 'Belanja bahan produksi',
       'amount': 3400000,
       'category': 'Bahan baku',
-      'createdAt': now.subtract(const Duration(days: 3)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 3)).toIso8601String(),
     },
     {
       'id': '${base + 21}',
@@ -158,7 +165,7 @@ Future<bool> seedBatikDemoData() async {
       'detail': 'Produksi mingguan',
       'amount': 2800000,
       'category': 'Tenaga kerja',
-      'createdAt': now.subtract(const Duration(days: 9)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 9)).toIso8601String(),
     },
     {
       'id': '${base + 22}',
@@ -166,21 +173,23 @@ Future<bool> seedBatikDemoData() async {
       'detail': 'Kebutuhan pengiriman',
       'amount': 650000,
       'category': 'Operasional',
-      'createdAt': now.subtract(const Duration(days: 16)).toIso8601String()
+      'createdAt': now.subtract(const Duration(days: 16)).toIso8601String(),
     },
   ]);
   await put('laras_cash_categories_v1', [
     {'id': 'income', 'name': 'Penjualan'},
-    {'id': 'expense', 'name': 'Operasional'}
+    {'id': 'expense', 'name': 'Operasional'},
   ]);
   await put('laras_product_categories_v1', [
     {'id': 'fabric', 'name': 'Kain batik'},
     {'id': 'fashion', 'name': 'Busana'},
-    {'id': 'accessory', 'name': 'Aksesori'}
+    {'id': 'accessory', 'name': 'Aksesori'},
   ]);
   await prefs.setString('business_name', 'Batik Sekar');
   await prefs.setString(
-      'business_description', 'Batik tulis, batik cap & busana khas Surakarta');
+    'business_description',
+    'Batik tulis, batik cap & busana khas Surakarta',
+  );
   await prefs.setString('business_location', 'Laweyan, Surakarta, Jawa Tengah');
   await prefs.setString('business_category', 'Fashion & kerajinan');
   await _upgradeDemoData(prefs);
@@ -210,38 +219,80 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
 
   final newSuppliers = prefs.getString('laras_suppliers_v1') == null;
   if (newSuppliers) {
-    Map<String, dynamic> supplier(String id, String name, String phone,
-            String address, String note, int days) =>
+    Map<String, dynamic> supplier(
+      String id,
+      String name,
+      String phone,
+      String address,
+      String note,
+      int days,
+    ) =>
         {
           'id': id,
           'name': name,
           'phone': phone,
           'address': address,
           'note': note,
-          'createdAt': ago(days)
+          'createdAt': ago(days),
         };
     await write('laras_suppliers_v1', [
-      supplier('sup-klewer', 'Pedagang Mori Pasar Klewer', '0812-2000-1101',
-          'Pasar Klewer, Surakarta', 'Kain mori primissima dan katun', 200),
       supplier(
-          'sup-cv',
-          'CV Tekstil Nusantara',
-          '0271-555-0404',
-          'Jl. Slamet Riyadi, Surakarta',
-          'Kain mori, benang, dan kancing (grosir)',
-          160),
-      supplier('sup-malam', 'Toko Malam & Canting Laweyan', '0813-3000-2202',
-          'Laweyan, Surakarta', 'Malam batik, canting, dan soda abu', 190),
-      supplier('sup-warna', 'Toko Warna Batik Solo', '0857-4000-3303',
-          'Kauman, Surakarta', 'Pewarna naptol dan indigosol', 180),
-      supplier('sup-sutra', 'Toko Sutra Kotagede', '0813-5000-4404',
-          'Kotagede, Yogyakarta', 'Kain sutra untuk selendang', 120),
-      supplier('sup-kemasan', 'Toko Kemasan Pasar Gede', '0821-6000-5505',
-          'Pasar Gede, Surakarta', 'Box, plastik, dan label merek', 100),
+        'sup-klewer',
+        'Pedagang Mori Pasar Klewer',
+        '0812-2000-1101',
+        'Pasar Klewer, Surakarta',
+        'Kain mori primissima dan katun',
+        200,
+      ),
+      supplier(
+        'sup-cv',
+        'CV Tekstil Nusantara',
+        '0271-555-0404',
+        'Jl. Slamet Riyadi, Surakarta',
+        'Kain mori, benang, dan kancing (grosir)',
+        160,
+      ),
+      supplier(
+        'sup-malam',
+        'Toko Malam & Canting Laweyan',
+        '0813-3000-2202',
+        'Laweyan, Surakarta',
+        'Malam batik, canting, dan soda abu',
+        190,
+      ),
+      supplier(
+        'sup-warna',
+        'Toko Warna Batik Solo',
+        '0857-4000-3303',
+        'Kauman, Surakarta',
+        'Pewarna naptol dan indigosol',
+        180,
+      ),
+      supplier(
+        'sup-sutra',
+        'Toko Sutra Kotagede',
+        '0813-5000-4404',
+        'Kotagede, Yogyakarta',
+        'Kain sutra untuk selendang',
+        120,
+      ),
+      supplier(
+        'sup-kemasan',
+        'Toko Kemasan Pasar Gede',
+        '0821-6000-5505',
+        'Pasar Gede, Surakarta',
+        'Box, plastik, dan label merek',
+        100,
+      ),
     ]);
     Map<String, dynamic> material(
-            String id, String supplier, String name, String unit, int price,
-            [int? before]) =>
+      String id,
+      String supplier,
+      String name,
+      String unit,
+      int price, [
+      int? before,
+    ]) =>
         {
           'id': id,
           'supplierId': supplier,
@@ -255,25 +306,63 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
           ],
         };
     await write('laras_materials_v1', [
-      material('mat-mori-klewer', 'sup-klewer', 'Kain mori primissima', 'meter',
-          28000, 26000),
       material(
-          'mat-katun-klewer', 'sup-klewer', 'Kain katun halus', 'meter', 22000),
+        'mat-mori-klewer',
+        'sup-klewer',
+        'Kain mori primissima',
+        'meter',
+        28000,
+        26000,
+      ),
+      material(
+        'mat-katun-klewer',
+        'sup-klewer',
+        'Kain katun halus',
+        'meter',
+        22000,
+      ),
       material('mat-mori-cv', 'sup-cv', 'Kain mori primissima', 'meter', 26500),
       material('mat-benang', 'sup-cv', 'Benang & kancing', 'set', 6000),
       material(
-          'mat-malam', 'sup-malam', 'Malam batik (lilin)', 'kg', 65000, 62000),
+        'mat-malam',
+        'sup-malam',
+        'Malam batik (lilin)',
+        'kg',
+        65000,
+        62000,
+      ),
       material(
-          'mat-canting', 'sup-malam', 'Canting tulis tembaga', 'pcs', 18000),
+        'mat-canting',
+        'sup-malam',
+        'Canting tulis tembaga',
+        'pcs',
+        18000,
+      ),
       material('mat-soda', 'sup-malam', 'Soda abu (fiksasi)', 'kg', 14000),
       material('mat-naptol', 'sup-warna', 'Pewarna naptol', 'botol', 45000),
-      material('mat-indigosol', 'sup-warna', 'Pewarna indigosol', 'botol',
-          85000, 80000),
+      material(
+        'mat-indigosol',
+        'sup-warna',
+        'Pewarna indigosol',
+        'botol',
+        85000,
+        80000,
+      ),
       material('mat-sutra', 'sup-sutra', 'Kain sutra', 'meter', 60000, 58000),
       material(
-          'mat-kemasan', 'sup-kemasan', 'Kemasan box & label', 'pcs', 3500),
+        'mat-kemasan',
+        'sup-kemasan',
+        'Kemasan box & label',
+        'pcs',
+        3500,
+      ),
       material(
-          'mat-plastik', 'sup-kemasan', 'Plastik pembungkus', 'pak', 12000),
+        'mat-plastik',
+        'sup-kemasan',
+        'Plastik pembungkus',
+        'pak',
+        12000,
+      ),
     ]);
     // Riwayat pembelian bahan di Keuangan.
     Map<String, dynamic> buy(int n, String name, int amount, int days) => {
@@ -283,11 +372,15 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
           'category': 'Bahan baku',
           'method': 'Tunai',
           'createdAt': ago(days),
-          'source': 'Supplier'
+          'source': 'Supplier',
         };
     await write('laras_expenses_v1', [
-      buy(1, 'Beli Kain mori primissima (Pedagang Mori Pasar Klewer)', 1120000,
-          11),
+      buy(
+        1,
+        'Beli Kain mori primissima (Pedagang Mori Pasar Klewer)',
+        1120000,
+        11,
+      ),
       buy(2, 'Beli Pewarna naptol (Toko Warna Batik Solo)', 540000, 13),
       buy(3, 'Beli Malam batik (Toko Malam & Canting Laweyan)', 650000, 16),
       buy(4, 'Beli Kain sutra (Toko Sutra Kotagede)', 900000, 22),
@@ -297,21 +390,29 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
   }
 
   Map<String, dynamic> line(
-          String id, String name, String unit, num qty, int price) =>
+    String id,
+    String name,
+    String unit,
+    num qty,
+    int price,
+  ) =>
       {
         'materialId': id,
         'name': name,
         'unit': unit,
         'qty': qty,
-        'unitPrice': price
+        'unitPrice': price,
       };
   Map<String, dynamic> recipe(
-          int labor, int overhead, List<Map<String, dynamic>> lines) =>
+    int labor,
+    int overhead,
+    List<Map<String, dynamic>> lines,
+  ) =>
       {
         'costMode': 'resep',
         'labor': labor,
         'overhead': overhead,
-        'recipe': lines
+        'recipe': lines,
       };
 
   final recipes = <String, Map<String, dynamic>>{
@@ -349,8 +450,15 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
       line('mat-kemasan', 'Kemasan box & label', 'pcs', 1, 3500),
     ]),
   };
-  Map<String, dynamic> product(String name, String sku, String category,
-          int price, int cost, int stock, int min) =>
+  Map<String, dynamic> product(
+    String name,
+    String sku,
+    String category,
+    int price,
+    int cost,
+    int stock,
+    int min,
+  ) =>
       {
         'name': name,
         'sku': sku,
@@ -358,16 +466,37 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
         'price': price,
         'cost': cost,
         'stock': stock,
-        'min': min
+        'min': min,
       };
   final extra = [
-    product('Batik Tulis Sidomukti 2m', 'BTL-002', 'Kain batik', 925000, 570000,
-        5, 3),
     product(
-        'Batik Cap Truntum 2m', 'BCP-002', 'Kain batik', 265000, 145000, 18, 8),
+      'Batik Tulis Sidomukti 2m',
+      'BTL-002',
+      'Kain batik',
+      925000,
+      570000,
+      5,
+      3,
+    ),
+    product(
+      'Batik Cap Truntum 2m',
+      'BCP-002',
+      'Kain batik',
+      265000,
+      145000,
+      18,
+      8,
+    ),
     product('Outer Batik Kimono', 'OTR-001', 'Busana', 295000, 160000, 9, 5),
     product(
-        'Selendang Batik Sutra', 'SLD-001', 'Aksesori', 185000, 95000, 14, 5),
+      'Selendang Batik Sutra',
+      'SLD-001',
+      'Aksesori',
+      185000,
+      95000,
+      14,
+      5,
+    ),
   ];
   final products = read('laras_products_v1');
   var changed = false;
