@@ -24,6 +24,7 @@ class ManageCerdasPage extends StatelessWidget {
       [
         ('supplier', 'Supplier', Icons.local_shipping_outlined),
         ('margin', 'Harga & Margin', Icons.price_change_outlined),
+        ('simulasi_harga', 'Simulasi Harga', Icons.tune_rounded),
         ('laporan', 'Laporan', Icons.bar_chart_rounded),
       ]
     ),
@@ -66,10 +67,10 @@ class ManageCerdasPage extends StatelessWidget {
                     GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 3,
+                      crossAxisCount: group.$3.length == 4 ? 4 : 3,
                       mainAxisSpacing: 8,
                       crossAxisSpacing: 4,
-                      childAspectRatio: 1.05,
+                      childAspectRatio: group.$3.length == 4 ? .75 : 1.05,
                       children: [
                         for (final item in group.$3)
                           InkWell(

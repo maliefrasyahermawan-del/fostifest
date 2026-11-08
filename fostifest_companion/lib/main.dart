@@ -16,6 +16,8 @@ import 'mock_data.dart';
 import 'laras_operations_page.dart';
 import 'manage_cerdas_page.dart';
 import 'supplier_page.dart';
+import 'price_simulation_page.dart';
+import 'legalitas_page.dart' as legal_v2;
 
 void main() => runApp(const FostifestApp());
 
@@ -334,7 +336,7 @@ class _FostifestAppState extends State<FostifestApp> {
               title: const Text('Legalitas usaha',
                   style: TextStyle(fontWeight: FontWeight.w900)),
             ),
-            body: const SafeArea(child: LegalitasPage()),
+            body: const SafeArea(child: legal_v2.LegalitasPage()),
           ),
         ));
         return;
@@ -359,6 +361,9 @@ class _FostifestAppState extends State<FostifestApp> {
         break;
       case 'margin':
         page = const LarasOperationsPage(section: 'margin');
+        break;
+      case 'simulasi_harga':
+        page = const PriceSimulationPage();
         break;
     }
     if (page == null) return;
