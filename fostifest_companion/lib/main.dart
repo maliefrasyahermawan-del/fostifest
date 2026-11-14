@@ -22,6 +22,8 @@ import 'mock_data.dart';
 import 'laras_operations_page.dart';
 import 'manage_cerdas_page.dart';
 import 'supplier_page.dart';
+import 'price_simulation_page.dart';
+import 'legalitas_page.dart' as legal_v2;
 
 void main() => runApp(const FostifestApp());
 
@@ -351,13 +353,18 @@ class _FostifestAppState extends State<FostifestApp> {
         return;
       case 'legalitas':
         await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
+          builder: (_) => const legal_v2.LegalitasPage(),
+        ));
+        return;
+      case 'dokumen':
+        await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
           builder: (_) => Scaffold(
             backgroundColor: const Color(0xFFF3F6F4),
             appBar: AppBar(
-              title: const Text('Legalitas usaha',
+              title: const Text('Daftar izin usaha',
                   style: TextStyle(fontWeight: FontWeight.w900)),
             ),
-            body: const SafeArea(child: LegalitasPage()),
+            body: const SafeArea(child: LegalChecklistPage()),
           ),
         ));
         return;
@@ -391,6 +398,9 @@ class _FostifestAppState extends State<FostifestApp> {
         break;
       case 'margin':
         page = const LarasOperationsPage(section: 'margin');
+        break;
+      case 'simulasi_harga':
+        page = const PriceSimulationPage();
         break;
     }
     if (page == null) return;

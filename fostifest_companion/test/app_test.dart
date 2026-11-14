@@ -135,11 +135,11 @@ void main() {
     await tester.tap(find.text('Manage Cerdas'));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-        find.byKey(const Key('manage_legalitas')), 200,
+        find.byKey(const Key('manage_dokumen')), 200,
         scrollable: find.byType(Scrollable).first);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('manage_legalitas')));
+    await tester.tap(find.byKey(const Key('manage_dokumen')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('legalitas_page')), findsOneWidget);
     expect(find.text('0%'), findsOneWidget);
@@ -154,11 +154,11 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-        find.byKey(const Key('manage_legalitas')), 200,
+        find.byKey(const Key('manage_dokumen')), 200,
         scrollable: find.byType(Scrollable).first);
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -200));
     await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('manage_legalitas')));
+    await tester.tap(find.byKey(const Key('manage_dokumen')));
     await tester.pumpAndSettle();
     expect(
         find.text('0%'), findsNothing); // status bertahan setelah dibuka lagi

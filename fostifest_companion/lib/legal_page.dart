@@ -371,13 +371,13 @@ int? legalDaysLeft(LegalEntry e, DateTime now) {
   return end.difference(today).inDays;
 }
 
-class LegalitasPage extends StatefulWidget {
-  const LegalitasPage({super.key});
+class LegalChecklistPage extends StatefulWidget {
+  const LegalChecklistPage({super.key});
   @override
-  State<LegalitasPage> createState() => _LegalitasPageState();
+  State<LegalChecklistPage> createState() => _LegalChecklistPageState();
 }
 
-class _LegalitasPageState extends State<LegalitasPage> {
+class _LegalChecklistPageState extends State<LegalChecklistPage> {
   final _state = <String, LegalEntry>{};
   bool _loading = true;
   String _filter = 'Semua';
