@@ -19,6 +19,16 @@ class ManageCerdasPage extends StatelessWidget {
       ]
     ),
     (
+      'Kelola Kas Keuangan',
+      'Arus kas dan kesehatan keuangan usaha',
+      [
+        ('cashflow', 'Manajemen Cashflow', Icons.swap_vert_rounded),
+        // Placeholder: isi menyusul, onOpen untuk id ini belum melakukan apa pun.
+        ('utang', 'Utang & Piutang', Icons.handshake_outlined),
+        ('impas', 'Titik Impas & Dana Cadangan', Icons.savings_outlined),
+      ]
+    ),
+    (
       'Pasokan & Harga',
       'Bahan baku, modal, dan margin produk',
       [
@@ -34,6 +44,7 @@ class ManageCerdasPage extends StatelessWidget {
       [
         ('catat', 'Catat Transaksi', Icons.edit_note_rounded),
         ('legalitas', 'Legalitas', Icons.verified_user_outlined),
+        ('dokumen', 'Daftar Izin', Icons.checklist_rtl_rounded),
         ('asisten', 'Asisten Laras', Icons.auto_awesome_outlined),
       ]
     ),
@@ -90,8 +101,7 @@ class ManageCerdasPage extends StatelessWidget {
                                           Color(0xFF45C98E)
                                         ]),
                                     borderRadius: BorderRadius.circular(18)),
-                                child: Icon(item.$3,
-                                    color: Colors.white, size: 28),
+                                child: Icon(item.$3, color: _ink, size: 28),
                               ),
                               const SizedBox(height: 6),
                               Text(item.$2,

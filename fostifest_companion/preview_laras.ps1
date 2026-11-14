@@ -1,6 +1,6 @@
 param([switch]$NoOpen)
 $ErrorActionPreference = 'Stop'
-$previewUrl = 'http://127.0.0.1:43827/'
+$previewUrl = 'http://127.0.0.1:43828/'
 $projectDirectory = $PSScriptRoot
 $indexFile = Join-Path $projectDirectory 'build\web\index.html'
 $serverScript = Join-Path $projectDirectory 'preview_server.ps1'
@@ -25,7 +25,7 @@ if ($needsBuild) {
   if (-not $flutterCommand) { Write-Host 'Flutter tidak ditemukan di PATH.'; exit 1 }
   Write-Host 'Menyiapkan preview ringan. Proses ini hanya diperlukan saat kode berubah dan dapat memerlukan beberapa menit.'
   Push-Location $projectDirectory
-  try { & $flutterCommand.Source build web --release -O1 --no-wasm-dry-run; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
+  try { & $flutterCommand.Source build web --release -O1 --no-wasm-dry-run --no-tree-shake-icons; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE } }
   finally { Pop-Location }
 }
 
@@ -35,10 +35,10 @@ if (-not (Test-PreviewReady)) {
   $deadline = (Get-Date).AddSeconds(30)
   while ((Get-Date) -lt $deadline -and -not (Test-PreviewReady)) {
     $server.Refresh()
-    if ($server.HasExited) { Write-Host 'Preview gagal dimulai. Pastikan port 43827 tidak digunakan aplikasi lain.'; exit 1 }
+    if ($server.HasExited) { Write-Host 'Preview gagal dimulai. Pastikan port 43828 tidak digunakan aplikasi lain.'; exit 1 }
     Start-Sleep -Milliseconds 500
   }
 }
-if (-not (Test-PreviewReady)) { Write-Host 'Preview belum dapat dibuka. Pastikan port 43827 tersedia.'; exit 1 }
+if (-not (Test-PreviewReady)) { Write-Host 'Preview belum dapat dibuka. Pastikan port 43828 tersedia.'; exit 1 }
 if (-not $NoOpen) { Start-Process $previewUrl; Write-Host 'Preview LARAS dibuka di browser.' }
 else { Write-Host "Preview LARAS siap di $previewUrl" }

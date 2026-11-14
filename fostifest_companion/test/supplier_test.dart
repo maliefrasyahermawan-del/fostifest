@@ -108,6 +108,8 @@ void main() {
     await enterDemo(tester);
     await tester.tap(find.text('Manage Cerdas'));
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.byKey(const Key('manage_margin')), 200,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.byKey(const Key('manage_margin')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Batik Cap Kawung 2m'), 200,
@@ -119,8 +121,8 @@ void main() {
     await tester.tap(find.byKey(const Key('open_recipe')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('recipe_page')), findsOneWidget);
-    expect(find.text('Rp150.000'), findsWidgets);
+    expect(find.text('Rp 150.000'), findsWidgets);
     expect(tester.widget<Text>(find.byKey(const Key('recipe_total'))).data,
-        'Rp150.000');
+        'Rp 150.000');
   });
 }
