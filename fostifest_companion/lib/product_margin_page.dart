@@ -33,7 +33,7 @@ class MarginBadge extends StatelessWidget {
             style: TextStyle(
                 fontWeight: FontWeight.w900,
                 color:
-                    ok ? const Color(0xFF0C6B40) : const Color(0xFF8A5A00))));
+                    ok ? const Color(0xFF35A565) : const Color(0xFF8A5A00))));
   }
 }
 
@@ -230,7 +230,7 @@ class _ProductMarginPageState extends State<ProductMarginPage> {
                 const Padding(
                     padding: EdgeInsets.only(top: 5, right: 10),
                     child:
-                        Icon(Icons.circle, size: 7, color: Color(0xFF0C6B40))),
+                        Icon(Icons.circle, size: 7, color: Color(0xFF35A565))),
                 Expanded(child: Text(r, style: const TextStyle(height: 1.4))),
               ])),
         const SizedBox(height: 14),

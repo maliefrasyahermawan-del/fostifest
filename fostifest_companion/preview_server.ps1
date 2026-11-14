@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'build\web')).TrimEnd('\') + '\'
 $listener = [Net.HttpListener]::new()
-$listener.Prefixes.Add('http://127.0.0.1:43827/')
+$listener.Prefixes.Add('http://127.0.0.1:43828/')
 $listener.Start()
 try {
   while ($listener.IsListening) {

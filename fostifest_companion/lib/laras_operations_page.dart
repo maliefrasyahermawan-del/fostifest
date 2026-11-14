@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'product_margin_page.dart';
@@ -40,7 +41,7 @@ String larasRupiah(num value) {
   for (var i = raw.length; i > 0; i -= 3) {
     groups.insert(0, raw.substring(i >= 3 ? i - 3 : 0, i));
   }
-  return 'Rp${groups.join('.')}';
+  return 'Rp ${groups.join('.')}';
 }
 
 class LarasOperationsPage extends StatefulWidget {
@@ -188,6 +189,7 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
     return rows
         .take(30)
         .map((e) => Card(
+            margin: const EdgeInsets.only(bottom: 8),
             child: ListTile(
                 leading: Icon(
                     e['type'] == 'Pemasukan'
@@ -213,7 +215,8 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
             const _Empty(
                 'Belum ada pelanggan. Tambahkan kontak pelanggan pertama.'),
           ..._customers.map((e) => Card(
-                  child: ListTile(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person)),
                 title: Text('${e['name']}'),
                 subtitle: Text('${e['detail'] ?? 'Tanpa kontak'}'),
@@ -383,32 +386,39 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
                 title: Text(income ? 'Catat pemasukan' : 'Catat pengeluaran'),
                 content: Form(
                     key: form,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      TextFormField(
-                          controller: name,
-                          decoration: const InputDecoration(
-                              labelText: 'Nama transaksi'),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Nama transaksi wajib diisi'
-                              : null),
-                      TextFormField(
-                          controller: amount,
-                          keyboardType: TextInputType.number,
-                          decoration:
-                              const InputDecoration(labelText: 'Nominal (Rp)'),
-                          validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
-                              ? 'Nominal harus lebih dari nol'
-                              : null),
-                      TextFormField(
-                          controller: category,
-                          decoration:
-                              const InputDecoration(labelText: 'Kategori')),
-                      const SizedBox(height: 8),
-                      const Text(
-                          'Metode pembayaran dicatat manual: tunai, transfer bank, atau e-wallet.',
-                          style:
-                              TextStyle(fontSize: 12, color: Color(0xFF5F766C)))
-                    ])),
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 12,
+                        children: [
+                          TextFormField(
+                              controller: name,
+                              decoration: const InputDecoration(
+                                  labelText: 'Nama transaksi'),
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Nama transaksi wajib diisi'
+                                  : null),
+                          TextFormField(
+                              controller: amount,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: const InputDecoration(
+                                  labelText: 'Nominal (Rp)'),
+                              validator: (v) =>
+                                  (int.tryParse(v ?? '') ?? 0) <= 0
+                                      ? 'Nominal harus lebih dari nol'
+                                      : null),
+                          TextFormField(
+                              controller: category,
+                              decoration:
+                                  const InputDecoration(labelText: 'Kategori')),
+                          const SizedBox(height: 8),
+                          const Text(
+                              'Metode pembayaran dicatat manual: tunai, transfer bank, atau e-wallet.',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF5F766C)))
+                        ])),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(c),
@@ -448,19 +458,22 @@ class _LarasOperationsPageState extends State<LarasOperationsPage> {
                     initial == null ? 'Tambah pelanggan' : 'Ubah pelanggan'),
                 content: Form(
                     key: form,
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      TextFormField(
-                          controller: name,
-                          decoration: const InputDecoration(
-                              labelText: 'Nama pelanggan'),
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Nama wajib diisi'
-                              : null),
-                      TextFormField(
-                          controller: detail,
-                          decoration: const InputDecoration(
-                              labelText: 'Telepon, alamat, atau catatan'))
-                    ])),
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 12,
+                        children: [
+                          TextFormField(
+                              controller: name,
+                              decoration: const InputDecoration(
+                                  labelText: 'Nama pelanggan'),
+                              validator: (v) => v == null || v.trim().isEmpty
+                                  ? 'Nama wajib diisi'
+                                  : null),
+                          TextFormField(
+                              controller: detail,
+                              decoration: const InputDecoration(
+                                  labelText: 'Telepon, alamat, atau catatan'))
+                        ])),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(c),
@@ -579,7 +592,7 @@ class _Retry extends StatelessWidget {
   final VoidCallback onRetry;
   @override
   Widget build(BuildContext context) => Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+          child: Column(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
         const Icon(Icons.cloud_off_outlined, size: 42),
         const SizedBox(height: 10),
         Text(message),

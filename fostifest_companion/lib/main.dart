@@ -8,9 +8,15 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'break_even_page.dart';
+import 'chat_paste_page.dart';
+import 'cashflow_page.dart';
+import 'debt_page.dart';
+import 'guide_page.dart';
+import 'report_pdf.dart';
+import 'legal_page.dart';
 import 'inventory_page.dart';
 import 'mock_data.dart';
 import 'laras_operations_page.dart';
@@ -304,10 +310,26 @@ class _FostifestAppState extends State<FostifestApp> {
                   style: TextStyle(fontWeight: FontWeight.w900)),
             ),
             body: SafeArea(
-              child: AddTransactionPage(onSave: (item) async {
-                await _addTransaction(item);
-                if (pageContext.mounted) Navigator.of(pageContext).pop();
-              }),
+              child: AddTransactionPage(
+                onSave: (item) async {
+                  await _addTransaction(item);
+                  if (pageContext.mounted) Navigator.of(pageContext).pop();
+                },
+                onTempelChat: () async {
+                  final saved = await Navigator.of(pageContext).push<bool>(
+                      MaterialPageRoute(builder: (_) => const ChatPastePage()));
+                  if (saved != true) return;
+                  await _loadProfile();
+                  if (!mounted) return;
+                  setState(() => _tab = 1);
+                  if (pageContext.mounted) Navigator.of(pageContext).pop();
+                  _navigatorKey.currentContext == null
+                      ? null
+                      : ScaffoldMessenger.of(_navigatorKey.currentContext!)
+                          .showSnackBar(const SnackBar(
+                              content: Text('Pesanan dari chat tersimpan.')));
+                },
+              ),
             ),
           ),
         ));
@@ -330,6 +352,7 @@ class _FostifestAppState extends State<FostifestApp> {
       case 'legalitas':
         await _navigatorKey.currentState?.push(MaterialPageRoute<void>(
           builder: (_) => Scaffold(
+            backgroundColor: const Color(0xFFF3F6F4),
             appBar: AppBar(
               title: const Text('Legalitas usaha',
                   style: TextStyle(fontWeight: FontWeight.w900)),
@@ -349,6 +372,15 @@ class _FostifestAppState extends State<FostifestApp> {
     switch (feature) {
       case 'produk':
         page = const InventoryPage();
+        break;
+      case 'cashflow':
+        page = const CashflowPage();
+        break;
+      case 'utang':
+        page = const DebtPage();
+        break;
+      case 'impas':
+        page = const BreakEvenPage();
         break;
       case 'pelanggan':
         page = const LarasOperationsPage(section: 'pelanggan');
@@ -478,6 +510,10 @@ class _FostifestAppState extends State<FostifestApp> {
           fillColor: _warmWhite,
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          floatingLabelStyle: WidgetStateTextStyle.resolveWith((states) =>
+              TextStyle(
+                  color:
+                      states.contains(WidgetState.focused) ? _gold : _muted)),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: _divider),
@@ -490,6 +526,51 @@ class _FostifestAppState extends State<FostifestApp> {
             borderRadius: BorderRadius.circular(16),
             borderSide: const BorderSide(color: _gold, width: 2),
           ),
+        ),
+        listTileTheme: const ListTileThemeData(
+          titleTextStyle: TextStyle(
+              fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 0),
+          subtitleTextStyle: TextStyle(
+              fontSize: 12.5, letterSpacing: 0, height: 1.35, color: _muted),
+        ),
+        dividerTheme: const DividerThemeData(color: _divider, thickness: 1),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          titleTextStyle: const TextStyle(
+              fontSize: 19, fontWeight: FontWeight.w900, color: _ink),
+          contentTextStyle:
+              const TextStyle(fontSize: 14, height: 1.4, color: _ink),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+            style: OutlinedButton.styleFrom(
+                foregroundColor: _ink,
+                side: const BorderSide(color: Color(0xFF9FB8AA)),
+                textStyle: const TextStyle(fontWeight: FontWeight.w700),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)))),
+        textButtonTheme: TextButtonThemeData(
+            style: TextButton.styleFrom(
+                foregroundColor: _ink,
+                textStyle: const TextStyle(fontWeight: FontWeight.w800))),
+        bottomSheetTheme: const BottomSheetThemeData(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          showDragHandle: true,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+        ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: _ink,
+          contentTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
         fontFamily: 'Roboto',
       ),
@@ -546,12 +627,12 @@ class _FostifestAppState extends State<FostifestApp> {
                   body: SafeArea(top: _tab != 2, child: pages[_tab]),
                   floatingActionButton: _tab == 2
                       ? null
-                      : FloatingActionButton.extended(
+                      : FloatingActionButton(
                           onPressed: _openFosti,
+                          tooltip: 'Tanya Laras',
                           backgroundColor: _brandYellow,
                           foregroundColor: Colors.white,
-                          icon: const Icon(Icons.auto_awesome_rounded),
-                          label: const Text('Laras'),
+                          child: const Icon(Icons.auto_awesome_rounded),
                         ),
                   bottomNavigationBar: FostifestBottomBar(
                     selectedIndex: _tab,
@@ -597,7 +678,7 @@ class FostifestSplashScreen extends StatelessWidget {
                       size: 58, color: _ink),
                 ),
                 const SizedBox(height: 24),
-                const Text('LARAS UMKM',
+                const Text('LARAS',
                     style: TextStyle(
                         fontSize: 28,
                         letterSpacing: 3,
@@ -704,7 +785,7 @@ class _FostifestLoginScreenState extends State<FostifestLoginScreen> {
                             color: _ink, size: 34),
                       ),
                       const SizedBox(height: 14),
-                      const Text('LARAS UMKM',
+                      const Text('LARAS',
                           style: TextStyle(
                               fontSize: 25,
                               fontWeight: FontWeight.w900,
@@ -858,7 +939,7 @@ class _FostifestRegistrationScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(
-          backgroundColor: const Color(0xFF8FDDB3),
+          backgroundColor: const Color(0xFF8FE388),
           foregroundColor: _ink,
           title: const Text('Daftar akun LARAS UMKM',
               style: TextStyle(fontWeight: FontWeight.w900)),
@@ -948,8 +1029,7 @@ class _FostifestRegistrationScreenState
                   child: const Row(children: [
                     CircleAvatar(
                         backgroundColor: _brandYellow,
-                        child: Icon(Icons.storefront_rounded,
-                            color: Colors.white)),
+                        child: Icon(Icons.storefront_rounded, color: _ink)),
                     SizedBox(width: 12),
                     Expanded(
                         child: Column(
@@ -1099,9 +1179,7 @@ class _CenterNavItem extends StatelessWidget {
                           offset: Offset(0, 5))
                     ]),
                 child: const Icon(Icons.dashboard_customize_rounded,
-                    key: Key('smart_record_icon'),
-                    color: Colors.white,
-                    size: 30)),
+                    key: Key('smart_record_icon'), color: _ink, size: 30)),
             const SizedBox(height: 3),
             Text('Manage Cerdas',
                 maxLines: 1,
@@ -1156,7 +1234,7 @@ class MobileHeader extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                const Text('LARAS UMKM',
+                const Text('LARAS',
                     key: Key('home_brand'),
                     style: TextStyle(
                         letterSpacing: 1.5,
@@ -1179,7 +1257,7 @@ class MobileHeader extends StatelessWidget {
       );
 }
 
-/// Sidebar fitur: semua fitur LARAS UMKM tersimpan di sini.
+/// Sidebar fitur: semua fitur LARAS tersimpan di sini.
 class LarasSidebar extends StatelessWidget {
   const LarasSidebar(
       {super.key, required this.profile, required this.onFeature});
@@ -1354,7 +1432,7 @@ class _HomeHero extends StatelessWidget {
                 borderRadius: BorderRadius.circular(22),
                 boxShadow: const [
                   BoxShadow(
-                      color: Color(0x2214935A),
+                      color: Color(0x22FFC82C),
                       blurRadius: 18,
                       offset: Offset(0, 8))
                 ]),
@@ -1381,7 +1459,7 @@ class _HomeHero extends StatelessWidget {
                               ]).createShader(rect),
                       child: ColorFiltered(
                           colorFilter: const ColorFilter.mode(
-                              Color(0x331FB36F), BlendMode.srcATop),
+                              Color(0x33FFC82C), BlendMode.srcATop),
                           child: Image.asset('assets/images/hero-store.jpg',
                               fit: BoxFit.cover,
                               alignment: const Alignment(.45, 0))))),
@@ -1397,9 +1475,9 @@ class _HomeHero extends StatelessWidget {
                               mainAxisSize: MainAxisSize.min,
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Text('LARAS UMKM',
+                                const Text('LARAS',
                                     style: TextStyle(
-                                        color: Color(0xFF0C6B40),
+                                        color: _deepGold,
                                         fontSize: 11,
                                         fontWeight: FontWeight.w800,
                                         letterSpacing: 1)),
@@ -1628,6 +1706,173 @@ class _FeatureSearchState extends State<_FeatureSearch> {
   }
 }
 
+/// Rekomendasi usaha berbasis aturan lokal dari data transaksi (offline, tanpa LLM).
+/// shortcut: aturan tetap, bukan model AI; upgrade ke LLM bila perlu saran bebas.
+List<(IconData, String, String)> buildAiInsights({
+  required List<TransactionItem> items,
+  required int monthlyRevenue,
+  required int monthlyProfit,
+  DateTime? now,
+}) {
+  final today = now ?? DateTime.now();
+  int sum(Iterable<TransactionItem> l) => l.fold(0, (s, e) => s + e.amount);
+  final last14 = items
+      .where((e) => e.date.isAfter(today.subtract(const Duration(days: 14))));
+  final prev14 = items.where((e) =>
+      e.date.isAfter(today.subtract(const Duration(days: 28))) &&
+      !e.date.isAfter(today.subtract(const Duration(days: 14))));
+  final recent = sum(last14), before = sum(prev14);
+  final out = <(IconData, String, String)>[];
+
+  if (items.isEmpty) {
+    out.add((
+      Icons.edit_note_rounded,
+      'Mulai catat penjualan',
+      'Catat setiap transaksi agar LARAS bisa menghitung laba dan memberi saran yang tepat.'
+    ));
+  } else {
+    if (before > 0 && recent < before * 0.8) {
+      out.add((
+        Icons.trending_down_rounded,
+        'Omzet 2 minggu terakhir turun',
+        'Coba promo singkat atau kirim penawaran ke pelanggan lama lewat WhatsApp untuk menaikkan penjualan.'
+      ));
+    } else if (before > 0 && recent > before * 1.2) {
+      out.add((
+        Icons.trending_up_rounded,
+        'Penjualan sedang naik',
+        'Pastikan stok bahan cukup dan pertimbangkan menaikkan harga sedikit untuk produk yang laris.'
+      ));
+    }
+    if (monthlyRevenue > 0) {
+      final margin = monthlyProfit / monthlyRevenue;
+      if (margin < 0.2) {
+        out.add((
+          Icons.price_change_outlined,
+          'Margin laba masih tipis',
+          'Cek harga bahan di menu Supplier atau naikkan harga jual agar laba minimal 20-30%.'
+        ));
+      } else if (margin >= 0.3) {
+        out.add((
+          Icons.savings_outlined,
+          'Margin laba sehat',
+          'Sisihkan sebagian laba untuk modal promosi atau menambah varian produk.'
+        ));
+      }
+    }
+    final totals = <String, int>{};
+    for (final e in items) {
+      totals[e.name] = (totals[e.name] ?? 0) + e.amount;
+    }
+    final total = sum(items);
+    if (total > 0 && totals.length > 1) {
+      final top = totals.entries.reduce((a, b) => a.value >= b.value ? a : b);
+      if (top.value / total > .5) {
+        out.add((
+          Icons.pie_chart_outline_rounded,
+          'Pendapatan bertumpu pada satu produk',
+          '"${top.key}" menyumbang lebih dari separuh omzet. Tambah produk pelengkap atau paket bundling.'
+        ));
+      }
+    }
+  }
+  out.addAll([
+    (
+      Icons.storefront_outlined,
+      'Pasarkan secara online',
+      'Foto produk yang rapi lalu pasang di WhatsApp Business, Instagram, atau marketplace.'
+    ),
+    (
+      Icons.verified_user_outlined,
+      'Lengkapi legalitas usaha',
+      'NIB dan izin yang lengkap memudahkan masuk marketplace, kemitraan, dan pembiayaan.'
+    ),
+  ]);
+  return out.take(5).toList();
+}
+
+class _AiInsightCard extends StatelessWidget {
+  const _AiInsightCard(
+      {required this.items,
+      required this.monthlyRevenue,
+      required this.monthlyProfit});
+  final List<TransactionItem> items;
+  final int monthlyRevenue, monthlyProfit;
+
+  @override
+  Widget build(BuildContext context) {
+    final tips = buildAiInsights(
+        items: items,
+        monthlyRevenue: monthlyRevenue,
+        monthlyProfit: monthlyProfit);
+    return Card(
+      key: const Key('ai_insight_card'),
+      elevation: 0,
+      color: _cream,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                    color: _brandYellow,
+                    borderRadius: BorderRadius.circular(13)),
+                child: const Icon(Icons.auto_awesome,
+                    color: Colors.white, size: 22)),
+            const SizedBox(width: 12),
+            const Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Text('AI Insight',
+                      style:
+                          TextStyle(fontWeight: FontWeight.w900, color: _ink)),
+                  SizedBox(height: 2),
+                  Text('Langkah untuk mengembangkan usahamu',
+                      style: TextStyle(fontSize: 12, color: _ink)),
+                ])),
+          ]),
+          const SizedBox(height: 14),
+          for (var i = 0; i < tips.length; i++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child:
+                  Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                    width: 28,
+                    height: 28,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                        color: Colors.white, shape: BoxShape.circle),
+                    child: Icon(tips[i].$1, size: 17, color: _deepGold)),
+                const SizedBox(width: 11),
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Text(tips[i].$2,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
+                              color: _ink)),
+                      const SizedBox(height: 2),
+                      Text(tips[i].$3,
+                          style: const TextStyle(
+                              fontSize: 12.5, height: 1.35, color: _ink)),
+                    ])),
+              ]),
+            ),
+          const Text(
+              'Saran otomatis dari data transaksi, bukan nasihat keuangan.',
+              style: TextStyle(fontSize: 11, color: _muted)),
+        ]),
+      ),
+    );
+  }
+}
+
 class HomePage extends StatefulWidget {
   const HomePage(
       {super.key,
@@ -1683,24 +1928,26 @@ class _HomePageState extends State<HomePage> {
               onAdd: widget.onAdd,
               onFeature: widget.onFeature),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 132,
-            child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  MetricCard(
-                      label: 'OMZET BULAN INI',
-                      value: formatRupiah(widget.monthlyRevenue),
-                      note: '${widget.transactionCount} transaksi',
-                      accent: _deepGold),
-                  const SizedBox(width: 12),
-                  MetricCard(
-                      label: 'ESTIMASI LABA',
-                      value: formatRupiah(widget.monthlyProfit),
-                      note: 'Berdasarkan biaya tercatat',
-                      accent: _deepGold),
-                ]),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: SizedBox(
+              height: 140,
+              child: Row(children: [
+                Expanded(
+                    child: MetricCard(
+                        label: 'OMZET BULAN INI',
+                        value: formatRupiah(widget.monthlyRevenue),
+                        note: '${widget.transactionCount} transaksi',
+                        accent: _deepGold)),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: MetricCard(
+                        label: 'ESTIMASI LABA',
+                        value: formatRupiah(widget.monthlyProfit),
+                        note: 'Dari biaya tercatat',
+                        accent: _deepGold)),
+              ]),
+            ),
           ),
           const SizedBox(height: 18),
           Padding(
@@ -1753,6 +2000,14 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: _AiInsightCard(
+                items: widget.items,
+                monthlyRevenue: widget.monthlyRevenue,
+                monthlyProfit: widget.monthlyProfit),
           ),
           const SectionTitle(title: 'Tren omzet'),
           Padding(
@@ -1825,26 +2080,34 @@ class _RevenueTrendCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(children: [
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: const {
-              7: '1 Minggu',
-              21: '3 Minggu',
-              30: '1 Bulan',
-              90: '3 Bulan'
-            }
-                .entries
-                .map((entry) => ChoiceChip(
-                      label: Text(entry.value),
+          Row(
+            children: [
+              for (final entry in const {
+                7: '1 Minggu',
+                21: '3 Minggu',
+                30: '1 Bulan',
+                90: '3 Bulan'
+              }.entries)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 3),
+                    child: ChoiceChip(
+                      label: FittedBox(
+                          fit: BoxFit.scaleDown, child: Text(entry.value)),
+                      showCheckmark: false,
+                      padding: EdgeInsets.zero,
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+                      visualDensity: VisualDensity.compact,
                       selected: selectedDays == entry.key,
                       onSelected: (_) => onChanged(entry.key),
-                    ))
-                .toList(),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 18),
           SizedBox(
-            height: 150,
+            height: 162,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(
@@ -2071,112 +2334,6 @@ class ProfilePage extends StatelessWidget {
       );
 }
 
-class LarasGuidePage extends StatelessWidget {
-  const LarasGuidePage({super.key});
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Panduan LARAS UMKM')),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: const [
-              Text('Mulai mengelola usaha',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
-              SizedBox(height: 6),
-              Text(
-                  'Gunakan LARAS untuk memahami arus kas, stok, margin, dan arah usaha.',
-                  style: TextStyle(color: _muted, height: 1.4)),
-              SizedBox(height: 20),
-              _GuideStep(
-                  number: '1',
-                  icon: Icons.edit_note_rounded,
-                  title: 'Catat keuangan',
-                  text:
-                      'Buka Catatan atau Manage Cerdas untuk mencatat pemasukan dan pengeluaran. Gunakan kategori agar laporan lebih mudah dibaca.'),
-              _GuideStep(
-                  number: '2',
-                  icon: Icons.inventory_2_outlined,
-                  title: 'Perbarui produk dan stok',
-                  text:
-                      'Tambahkan produk, harga modal, harga jual, jumlah stok, dan batas stok minimum. Periksa produk yang perlu diisi ulang.'),
-              _GuideStep(
-                  number: '3',
-                  icon: Icons.auto_graph_rounded,
-                  title: 'Evaluasi harga dan margin',
-                  text:
-                      'Di Manage Cerdas, lihat Harga & Margin untuk membandingkan harga jual dengan modal dan menentukan produk yang perlu dievaluasi.'),
-              _GuideStep(
-                  number: '4',
-                  icon: Icons.bar_chart_rounded,
-                  title: 'Baca laporan usaha',
-                  text:
-                      'Buka Catatan untuk melihat ringkasan pemasukan, pengeluaran, laba-rugi, dan laporan periode usaha.'),
-              _GuideStep(
-                  number: '5',
-                  icon: Icons.verified_user_outlined,
-                  title: 'Lengkapi legalitas',
-                  text:
-                      'Catat status NIB, merek/P-IRT, serta sertifikasi halal sebagai pengingat dokumen usaha.'),
-              SizedBox(height: 12),
-              Card(
-                  color: _cream,
-                  child: Padding(
-                      padding: EdgeInsets.all(16),
-                      child: Text(
-                          'Tips: catat transaksi pada hari yang sama supaya ringkasan usaha tetap akurat.',
-                          style: TextStyle(height: 1.4, color: _ink)))),
-            ],
-          ),
-        ),
-      );
-}
-
-class _GuideStep extends StatelessWidget {
-  const _GuideStep(
-      {required this.number,
-      required this.icon,
-      required this.title,
-      required this.text});
-  final String number, title, text;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              CircleAvatar(
-                  backgroundColor: _brandYellow,
-                  foregroundColor: Colors.white,
-                  child: Text(number,
-                      style: const TextStyle(fontWeight: FontWeight.w900))),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Row(children: [
-                      Icon(icon, size: 19, color: _deepGold),
-                      const SizedBox(width: 7),
-                      Expanded(
-                          child: Text(title,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w900)))
-                    ]),
-                    const SizedBox(height: 5),
-                    Text(text,
-                        style: const TextStyle(
-                            fontSize: 13, height: 1.4, color: _muted)),
-                  ])),
-            ]),
-          ),
-        ),
-      );
-}
-
 class PrivacyDataPage extends StatelessWidget {
   const PrivacyDataPage({super.key});
 
@@ -2265,7 +2422,7 @@ class AboutFostifestPage extends StatelessWidget {
         appBar: AppBar(title: const Text('Tentang LARAS UMKM')),
         body: SafeArea(
             child: ListView(padding: const EdgeInsets.all(24), children: const [
-          Text('LARAS UMKM',
+          Text('LARAS',
               style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.w900,
@@ -2508,6 +2665,8 @@ class _LedgerPageState extends State<LedgerPage> {
   int _reportTab = 1;
   late DateTime _month;
   late DateTime _selectedDate;
+  // Rentang tanggal khusus tab Laporan (inklusif); tab lain tetap per bulan.
+  late DateTimeRange _range;
 
   @override
   void initState() {
@@ -2516,26 +2675,30 @@ class _LedgerPageState extends State<LedgerPage> {
     final now = DateTime.now();
     _month = DateTime(now.year, now.month);
     _selectedDate = DateTime(now.year, now.month, now.day);
+    _range = _monthRange(_month);
   }
 
-  List<TransactionItem> get _monthlyItems => widget.items
-      .where((item) =>
-          item.date.year == _month.year && item.date.month == _month.month)
-      .toList();
+  static DateTimeRange _monthRange(DateTime m) => DateTimeRange(
+      start: DateTime(m.year, m.month), end: DateTime(m.year, m.month + 1, 0));
+
+  bool _inPeriod(DateTime d) {
+    if (_tab != 2) return d.year == _month.year && d.month == _month.month;
+    return !d.isBefore(_range.start) &&
+        d.isBefore(_range.end.add(const Duration(days: 1)));
+  }
+
+  List<TransactionItem> get _monthlyItems =>
+      widget.items.where((item) => _inPeriod(item.date)).toList();
   int get _income => _monthlyItems.fold(0, (sum, item) => sum + item.amount);
   List<Map<String, dynamic>> get _monthlyExpenses => widget.expenses.where((e) {
         final date = DateTime.tryParse('${e['createdAt']}');
-        return date != null &&
-            date.year == _month.year &&
-            date.month == _month.month;
+        return date != null && _inPeriod(date);
       }).toList();
   int get _operatingExpense =>
       _monthlyExpenses.fold(0, (sum, e) => sum + (e['amount'] as int));
   int get _costOfGoods => widget.sales.where((e) {
         final date = DateTime.tryParse('${e['date']}');
-        return date != null &&
-            date.year == _month.year &&
-            date.month == _month.month;
+        return date != null && _inPeriod(date);
       }).fold(
           0,
           (sum, sale) =>
@@ -2560,47 +2723,20 @@ class _LedgerPageState extends State<LedgerPage> {
   }
 
   Future<void> _shareFinancePdf() async {
-    final document = pw.Document();
-    document.addPage(pw.MultiPage(
-        build: (context) => [
-              pw.Header(
-                  level: 0, child: pw.Text('LARAS UMKM - Laporan Laba Rugi')),
-              pw.Paragraph(text: 'Usaha: ${widget.profile.name}'),
-              pw.Paragraph(text: 'Periode: ${formatMonthYear(_month)}'),
-              pw.SizedBox(height: 8),
-              pw.Text('Rincian pendapatan',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              if (_monthlyItems.isEmpty)
-                pw.Paragraph(
-                    text: 'Belum ada transaksi tercatat pada periode ini.')
-              else
-                pw.TableHelper.fromTextArray(
-                  headers: ['Tanggal', 'Produk', 'Sumber', 'Nominal'],
-                  data: _monthlyItems
-                      .map((item) => [
-                            formatDate(item.date),
-                            item.name,
-                            item.source,
-                            formatRupiah(item.amount)
-                          ])
-                      .toList(),
-                ),
-              pw.SizedBox(height: 14),
-              pw.Text('Ringkasan laba rugi',
-                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.Bullet(text: 'Total pendapatan: ${formatRupiah(_income)}'),
-              pw.Bullet(text: 'Total beban: ${formatRupiah(_expense)}'),
-              pw.Bullet(
-                  text: 'Laba bersih: ${formatRupiah(_income - _expense)}'),
-              pw.Bullet(text: 'Estimasi PPh final 0,5%: ${formatRupiah(_tax)}'),
-              pw.SizedBox(height: 12),
-              pw.Text(
-                  'Laporan ini merupakan rangkuman internal dan bukan laporan yang diaudit. Lengkapi harga modal produk dan seluruh biaya usaha agar evaluasi margin semakin akurat.'),
-            ]));
+    final repo = LarasLocalRepository();
+    final data = buildReportData(
+      business: widget.profile.name,
+      range: _range,
+      income: await repo.read(LarasLocalRepository.income),
+      expenses: await repo.read(LarasLocalRepository.expenses),
+      cogs: _costOfGoods,
+      debts: await repo.read(kDebtsKey),
+    );
+    final document = buildFinanceReportPdf(data);
     await Printing.sharePdf(
       bytes: await document.save(),
       filename:
-          'laporan-laba-rugi-${_month.year}-${_month.month.toString().padLeft(2, '0')}.pdf',
+          'laporan-keuangan-${_range.start.toIso8601String().substring(0, 10)}_${_range.end.toIso8601String().substring(0, 10)}.pdf',
     );
   }
 
@@ -2617,7 +2753,7 @@ class _LedgerPageState extends State<LedgerPage> {
                       style:
                           TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 3),
-                  const Text('Transaksi dan laporan usaha dalam satu tempat.',
+                  const Text('Transaksi dan laporan usaha.',
                       style: TextStyle(color: _muted)),
                 ])),
             IconButton(
@@ -2642,6 +2778,7 @@ class _LedgerPageState extends State<LedgerPage> {
                   label: Text('Laporan'),
                   icon: Icon(Icons.description_outlined)),
             ],
+            showSelectedIcon: false,
             selected: {_tab},
             onSelectionChanged: (value) => setState(() => _tab = value.first),
           ),
@@ -2668,6 +2805,7 @@ class _LedgerPageState extends State<LedgerPage> {
             const _EmptyMonth(message: 'Belum ada transaksi pada bulan ini.')
           else
             ..._monthlyItems.map((item) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
                   child: ListTile(
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
@@ -2786,20 +2924,45 @@ class _LedgerPageState extends State<LedgerPage> {
     );
   }
 
+  /// Baris beban, gayanya sama dengan baris pendapatan agar laporan rapi.
+  Widget _expenseRow(Map<String, dynamic> e) {
+    final date = DateTime.tryParse('${e['createdAt']}');
+    final category = '${e['category'] ?? ''}';
+    final sub = [
+      if (date != null) formatDate(date),
+      if (category.isNotEmpty && category != 'null') category,
+    ].join(' · ');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(children: [
+        Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('${e['name']}',
+              style: const TextStyle(fontWeight: FontWeight.w800)),
+          if (sub.isNotEmpty)
+            Text(sub, style: const TextStyle(color: _muted, fontSize: 12)),
+        ])),
+        const SizedBox(width: 12),
+        Text(formatRupiah(e['amount'] as int),
+            style: const TextStyle(fontWeight: FontWeight.w800)),
+      ]),
+    );
+  }
+
   Widget _buildReport() => ListView(
         key: const Key('finance_report_page'),
         padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
         children: [
-          _MonthPicker(
-              month: _month,
-              onPrevious: () => _changeMonth(-1),
-              onNext: () => _changeMonth(1)),
+          _RangePicker(
+              range: _range, onChanged: (r) => setState(() => _range = r)),
           const SizedBox(height: 12),
           SegmentedButton<int>(
             segments: const [
               ButtonSegment(value: 0, label: Text('Pengeluaran')),
               ButtonSegment(value: 1, label: Text('Laba Rugi')),
             ],
+            showSelectedIcon: false,
             selected: {_reportTab},
             onSelectionChanged: (value) =>
                 setState(() => _reportTab = value.first),
@@ -2811,12 +2974,9 @@ class _LedgerPageState extends State<LedgerPage> {
             const SizedBox(height: 10),
             if (_monthlyExpenses.isEmpty)
               const _EmptyMonth(
-                  message: 'Belum ada pengeluaran pada bulan ini.')
+                  message: 'Belum ada pengeluaran pada periode ini.')
             else
-              ..._monthlyExpenses.map((e) => ListTile(
-                  title: Text('${e['name']}'),
-                  subtitle: Text('${e['detail']}'),
-                  trailing: Text(formatRupiah(e['amount'] as int)))),
+              ..._monthlyExpenses.map(_expenseRow),
             const SizedBox(height: 10),
             _ReportTotal(label: 'Total beban', value: _expense, negative: true),
           ] else ...[
@@ -2824,7 +2984,8 @@ class _LedgerPageState extends State<LedgerPage> {
                 style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             if (_monthlyItems.isEmpty)
-              const _EmptyMonth(message: 'Belum ada penjualan pada bulan ini.')
+              const _EmptyMonth(
+                  message: 'Belum ada penjualan pada periode ini.')
             else
               ..._monthlyItems.map((item) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
@@ -2851,11 +3012,9 @@ class _LedgerPageState extends State<LedgerPage> {
             const SizedBox(height: 10),
             if (_monthlyExpenses.isEmpty)
               const _EmptyMonth(
-                  message: 'Belum ada pengeluaran pada bulan ini.')
+                  message: 'Belum ada pengeluaran pada periode ini.')
             else
-              ..._monthlyExpenses.map((e) => ListTile(
-                  title: Text('${e['name']}'),
-                  trailing: Text(formatRupiah(e['amount'] as int)))),
+              ..._monthlyExpenses.map(_expenseRow),
             _ReportTotal(
                 label: 'Modal produk terjual',
                 value: _costOfGoods,
@@ -2894,7 +3053,7 @@ class _LedgerPageState extends State<LedgerPage> {
                 ])),
             const SizedBox(height: 9),
             const Text(
-                'Estimasi dari omzet bulan ini untuk UMKM. Bukan pengganti perhitungan pajak atau pelaporan resmi.',
+                'Estimasi dari omzet periode ini untuk UMKM. Bukan pengganti perhitungan pajak atau pelaporan resmi.',
                 style: TextStyle(fontSize: 12, color: _muted, height: 1.35)),
           ],
           const SizedBox(height: 18),
@@ -2908,10 +3067,78 @@ class _LedgerPageState extends State<LedgerPage> {
                   minimumSize: const Size.fromHeight(54))),
           const SizedBox(height: 9),
           const Text(
-              'Format merangkum pendapatan, beban, laba rugi, dan estimasi pajak dari catatan LARAS UMKM.',
+              'Format merangkum pendapatan, beban, laba rugi, dan estimasi pajak dari catatan LARAS.',
               style: TextStyle(fontSize: 12, color: _muted, height: 1.35)),
         ],
       );
+}
+
+class _RangePicker extends StatelessWidget {
+  const _RangePicker({required this.range, required this.onChanged});
+  final DateTimeRange range;
+  final ValueChanged<DateTimeRange> onChanged;
+
+  static const _short = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des' //
+  ];
+  static String _d(DateTime d) => '${d.day} ${_short[d.month - 1]} ${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final presets = <String, DateTimeRange>{
+      '7 hari': DateTimeRange(
+          start: today.subtract(const Duration(days: 6)), end: today),
+      '30 hari': DateTimeRange(
+          start: today.subtract(const Duration(days: 29)), end: today),
+      'Bulan ini': DateTimeRange(
+          start: DateTime(now.year, now.month),
+          end: DateTime(now.year, now.month + 1, 0)),
+      '3 bulan':
+          DateTimeRange(start: DateTime(now.year, now.month - 2), end: today),
+      'Tahun ini': DateTimeRange(
+          start: DateTime(now.year), end: DateTime(now.year, 12, 31)),
+    };
+    final days = range.end.difference(range.start).inDays + 1;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      OutlinedButton.icon(
+        key: const Key('report_range_button'),
+        onPressed: () async {
+          final picked = await showDateRangePicker(
+            context: context,
+            firstDate: DateTime(2020),
+            lastDate: DateTime(now.year + 1, 12, 31),
+            initialDateRange: range,
+            helpText: 'Pilih rentang tanggal laporan',
+            saveText: 'Terapkan',
+          );
+          if (picked != null) onChanged(picked);
+        },
+        icon: const Icon(Icons.date_range_outlined),
+        label: Text('${_d(range.start)} – ${_d(range.end)} · $days hari'),
+        style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(48), foregroundColor: _ink),
+      ),
+      const SizedBox(height: 8),
+      SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+              children: presets.entries
+                  .map((e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(e.key),
+                          showCheckmark: false,
+                          visualDensity: VisualDensity.compact,
+                          selected: e.value == range,
+                          onSelected: (_) => onChanged(e.value),
+                        ),
+                      ))
+                  .toList())),
+    ]);
+  }
 }
 
 class _MonthPicker extends StatelessWidget {
@@ -3003,7 +3230,7 @@ class _FinanceCalendar extends StatelessWidget {
                           : total > 0
                               ? (isDark
                                   ? const Color(0xFF123D2B)
-                                  : const Color(0xFFE4F4E9))
+                                  : const Color(0xFFE5F5E9))
                               : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
@@ -3140,8 +3367,12 @@ class _SummaryRow extends StatelessWidget {
 }
 
 class AddTransactionPage extends StatefulWidget {
-  const AddTransactionPage({super.key, required this.onSave});
+  const AddTransactionPage(
+      {super.key, required this.onSave, this.onTempelChat});
   final ValueChanged<TransactionItem> onSave;
+
+  /// Membuka alur Tempel Chat (baca pesanan dari chat lalu verifikasi).
+  final VoidCallback? onTempelChat;
 
   @override
   State<AddTransactionPage> createState() => _AddTransactionPageState();
@@ -3320,20 +3551,31 @@ class _AddTransactionPageState extends State<AddTransactionPage> {
         const Text('Pilih cara yang paling nyaman untuk usaha kamu.',
             style: TextStyle(color: _muted)),
         const SizedBox(height: 16),
-        SegmentedButton<int>(segments: const [
-          ButtonSegment(
-              value: 0, label: Text('Manual'), icon: Icon(Icons.edit_outlined)),
-          ButtonSegment(
-              value: 1,
-              label: Text('Chat'),
-              icon: Icon(Icons.chat_bubble_outline)),
-          ButtonSegment(
-              value: 2,
-              label: Text('Foto'),
-              icon: Icon(Icons.document_scanner_outlined))
-        ], selected: {
-          _mode
-        }, onSelectionChanged: (value) => setState(() => _mode = value.first)),
+        SegmentedButton<int>(
+            segments: const [
+              ButtonSegment(
+                  value: 0,
+                  label: Text('Manual'),
+                  icon: Icon(Icons.edit_outlined)),
+              ButtonSegment(
+                  value: 1,
+                  label: Text('Chat'),
+                  icon: Icon(Icons.chat_bubble_outline)),
+              ButtonSegment(
+                  value: 2,
+                  label: Text('Foto'),
+                  icon: Icon(Icons.document_scanner_outlined))
+            ],
+            selected: {
+              _mode
+            },
+            onSelectionChanged: (value) {
+              if (value.first == 1 && widget.onTempelChat != null) {
+                widget.onTempelChat!();
+                return;
+              }
+              setState(() => _mode = value.first);
+            }),
         const SizedBox(height: 20),
         if (_mode == 2) ...[
           const _ReceiptScanIntro(),
@@ -3571,111 +3813,6 @@ class _OcrResultHeader extends StatelessWidget {
       );
 }
 
-class LegalitasPage extends StatefulWidget {
-  const LegalitasPage({super.key});
-  @override
-  State<LegalitasPage> createState() => _LegalitasPageState();
-}
-
-class _LegalitasPageState extends State<LegalitasPage> {
-  bool _nib = false, _brand = false, _halal = false;
-  bool _loading = true;
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted)
-      setState(() {
-        _nib = prefs.getBool('legal_nib') ?? false;
-        _brand = prefs.getBool('legal_brand') ?? false;
-        _halal = prefs.getBool('legal_halal') ?? false;
-        _loading = false;
-      });
-  }
-
-  Future<void> _change(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    if (!await prefs.setBool(key, value)) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Status legalitas gagal disimpan.')));
-      return;
-    }
-    if (mounted)
-      setState(() {
-        if (key == 'legal_nib') {
-          _nib = value;
-        } else if (key == 'legal_brand') {
-          _brand = value;
-        } else {
-          _halal = value;
-        }
-      });
-  }
-
-  @override
-  Widget build(BuildContext context) => _loading
-      ? const Center(child: CircularProgressIndicator())
-      : ListView(padding: const EdgeInsets.fromLTRB(20, 20, 20, 24), children: [
-          const Text('Legalitas usaha',
-              key: Key('legalitas_page'),
-              style: TextStyle(
-                  fontSize: 22, fontWeight: FontWeight.w900, color: _ink)),
-          const SizedBox(height: 6),
-          const Text(
-              'Catat dokumen yang sudah dimiliki usaha. Status ini merupakan catatan pribadi, bukan verifikasi resmi.',
-              style: TextStyle(color: _muted, height: 1.4)),
-          const SizedBox(height: 20),
-          _LegalTile(
-              label: 'NIB (Nomor Induk Berusaha)',
-              complete: _nib,
-              onChanged: (value) => _change('legal_nib', value)),
-          const SizedBox(height: 10),
-          _LegalTile(
-              label: 'P-IRT / Merek',
-              complete: _brand,
-              onChanged: (value) => _change('legal_brand', value)),
-          const SizedBox(height: 10),
-          _LegalTile(
-              label: 'Sertifikasi Halal',
-              complete: _halal,
-              onChanged: (value) => _change('legal_halal', value)),
-        ]);
-}
-
-class _LegalTile extends StatelessWidget {
-  const _LegalTile(
-      {required this.label, required this.complete, required this.onChanged});
-  final String label;
-  final bool complete;
-  final ValueChanged<bool> onChanged;
-  @override
-  Widget build(BuildContext context) => Card(
-          child: CheckboxListTile(
-        value: complete,
-        onChanged: (value) => onChanged(value ?? false),
-        controlAffinity: ListTileControlAffinity.leading,
-        activeColor: _brandYellow,
-        checkColor: Colors.white,
-        title: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-        secondary: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-          decoration: BoxDecoration(
-              color: complete ? const Color(0xFFE5F5E9) : _cream,
-              borderRadius: BorderRadius.circular(12)),
-          child: Text(complete ? 'Lengkap' : 'Belum punya',
-              style: TextStyle(
-                  fontSize: 11,
-                  color: complete ? const Color(0xFF347347) : _deepGold,
-                  fontWeight: FontWeight.w700)),
-        ),
-      ));
-}
-
 class FostiPage extends StatefulWidget {
   const FostiPage(
       {super.key, required this.revenue, required this.transactionCount});
@@ -3746,9 +3883,7 @@ class _FostiPageState extends State<FostiPage> {
                         color: message.mine ? _brandYellow : _warmWhite,
                         borderRadius: BorderRadius.circular(16)),
                     child: Text(message.text,
-                        style: TextStyle(
-                            color: message.mine ? Colors.white : _ink,
-                            height: 1.4)),
+                        style: TextStyle(color: _ink, height: 1.4)),
                   ),
                 );
               },

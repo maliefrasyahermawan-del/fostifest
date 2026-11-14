@@ -7,7 +7,7 @@ const kSuppliersKey = 'laras_suppliers_v1';
 const kMaterialsKey = 'laras_materials_v1';
 const _ink = Color(0xFF123126);
 const _muted = Color(0xFF5F766C);
-const _deep = Color(0xFF0C6B40);
+const _deep = Color(0xFF35A565);
 
 /// Modal produk dari resep: bahan (harga terbaru) + upah + overhead.
 int recipeCost(
@@ -143,7 +143,7 @@ class _SupplierPageState extends State<SupplierPage> {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
       return Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
+          child: Column(mainAxisSize: MainAxisSize.min, spacing: 12, children: [
         Text(_error!),
         TextButton(onPressed: _load, child: const Text('Coba lagi')),
       ]));
@@ -226,24 +226,27 @@ Future<Map<String, dynamic>?> showSupplierForm(BuildContext context,
             content: Form(
                 key: form,
                 child: SingleChildScrollView(
-                    child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  TextFormField(
-                      key: const Key('supplier_name'),
-                      controller: name,
-                      decoration: _field('Nama supplier'),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Nama wajib diisi'
-                          : null),
-                  TextFormField(
-                      controller: phone,
-                      keyboardType: TextInputType.phone,
-                      decoration: _field('Nomor telepon / WhatsApp')),
-                  TextFormField(
-                      controller: address, decoration: _field('Alamat')),
-                  TextFormField(
-                      controller: note,
-                      decoration: _field('Catatan (mis. jenis bahan)')),
-                ]))),
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        spacing: 12,
+                        children: [
+                      TextFormField(
+                          key: const Key('supplier_name'),
+                          controller: name,
+                          decoration: _field('Nama supplier'),
+                          validator: (v) => v == null || v.trim().isEmpty
+                              ? 'Nama wajib diisi'
+                              : null),
+                      TextFormField(
+                          controller: phone,
+                          keyboardType: TextInputType.phone,
+                          decoration: _field('Nomor telepon / WhatsApp')),
+                      TextFormField(
+                          controller: address, decoration: _field('Alamat')),
+                      TextFormField(
+                          controller: note,
+                          decoration: _field('Catatan (mis. jenis bahan)')),
+                    ]))),
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(c),
@@ -354,30 +357,36 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
               title: Text(initial == null ? 'Tambah bahan' : 'Ubah bahan'),
               content: Form(
                   key: form,
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    TextFormField(
-                        key: const Key('material_name'),
-                        controller: name,
-                        decoration: _field('Nama bahan'),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Nama wajib diisi'
-                            : null),
-                    TextFormField(
-                        controller: unit,
-                        decoration:
-                            _field('Satuan', hint: 'meter, kg, roll, pcs'),
-                        validator: (v) => v == null || v.trim().isEmpty
-                            ? 'Satuan wajib diisi'
-                            : null),
-                    TextFormField(
-                        key: const Key('material_price'),
-                        controller: price,
-                        keyboardType: TextInputType.number,
-                        decoration: _field('Harga per satuan (Rp)'),
-                        validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
-                            ? 'Harga harus lebih dari nol'
-                            : null),
-                  ])),
+                  child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 12,
+                      children: [
+                        TextFormField(
+                            key: const Key('material_name'),
+                            controller: name,
+                            decoration: _field('Nama bahan'),
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Nama wajib diisi'
+                                : null),
+                        TextFormField(
+                            controller: unit,
+                            decoration:
+                                _field('Satuan', hint: 'meter, kg, roll, pcs'),
+                            validator: (v) => v == null || v.trim().isEmpty
+                                ? 'Satuan wajib diisi'
+                                : null),
+                        TextFormField(
+                            key: const Key('material_price'),
+                            controller: price,
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
+                            decoration: _field('Harga per satuan (Rp)'),
+                            validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
+                                ? 'Harga harus lebih dari nol'
+                                : null),
+                      ])),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(c),
@@ -508,31 +517,63 @@ class _SupplierDetailPageState extends State<SupplierDetailPage> {
         builder: (c) => StatefulBuilder(
             builder: (c, setLocal) => AlertDialog(
                   title: const Text('Catat pembelian bahan'),
-                  content: Column(mainAxisSize: MainAxisSize.min, children: [
-                    DropdownButtonFormField<String>(
-                        value: '${selected['id']}',
-                        isExpanded: true,
-                        items: [
-                          for (final m in mine)
-                            DropdownMenuItem(
-                                value: '${m['id']}',
-                                child: Text(
-                                    '${m['name']} · ${larasRupiah(m['pricePerUnit'] as num)}/${m['unit']}',
-                                    overflow: TextOverflow.ellipsis))
-                        ],
-                        onChanged: (v) => setLocal(() => selected =
-                            mine.firstWhere((m) => '${m['id']}' == v))),
-                    TextField(
-                        key: const Key('buy_qty'),
-                        controller: qty,
-                        keyboardType: TextInputType.number,
-                        onChanged: (_) => setLocal(() {}),
-                        decoration: _field('Jumlah (${selected['unit']})')),
-                    const SizedBox(height: 10),
-                    Text(
-                        'Total ${larasRupiah((double.tryParse(qty.text) ?? 0) * (selected['pricePerUnit'] as num))}',
-                        style: const TextStyle(fontWeight: FontWeight.w900)),
-                  ]),
+                  content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 12,
+                      children: [
+                        DropdownButtonFormField<String>(
+                            value: '${selected['id']}',
+                            isExpanded: true,
+                            decoration: _field('Bahan'),
+                            selectedItemBuilder: (_) => [
+                                  for (final m in mine)
+                                    Text('${m['name']}',
+                                        overflow: TextOverflow.ellipsis)
+                                ],
+                            items: [
+                              for (final m in mine)
+                                DropdownMenuItem(
+                                    value: '${m['id']}',
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('${m['name']}',
+                                              overflow: TextOverflow.ellipsis),
+                                          Text(
+                                              '${larasRupiah(m['pricePerUnit'] as num)} / ${m['unit']}',
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF5F766C))),
+                                        ]))
+                            ],
+                            onChanged: (v) => setLocal(() => selected =
+                                mine.firstWhere((m) => '${m['id']}' == v))),
+                        TextField(
+                            key: const Key('buy_qty'),
+                            controller: qty,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            onChanged: (_) => setLocal(() {}),
+                            decoration: _field('Jumlah (${selected['unit']})')),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                              color:
+                                  const Color(0xFF14935A).withValues(alpha: .2),
+                              borderRadius: BorderRadius.circular(14)),
+                          child: Row(children: [
+                            const Expanded(child: Text('Total pengeluaran')),
+                            Text(
+                                larasRupiah((double.tryParse(qty.text) ?? 0) *
+                                    (selected['pricePerUnit'] as num)),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w900, fontSize: 16)),
+                          ]),
+                        ),
+                      ]),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(c, false),
@@ -782,29 +823,50 @@ class _ProductRecipePageState extends State<ProductRecipePage> {
         builder: (c) => StatefulBuilder(
             builder: (c, setLocal) => AlertDialog(
                   title: const Text('Tambah bahan ke resep'),
-                  content: Column(mainAxisSize: MainAxisSize.min, children: [
-                    DropdownButtonFormField<String>(
-                        key: const Key('recipe_material'),
-                        value: '${selected['id']}',
-                        isExpanded: true,
-                        items: [
-                          for (final m in _materials)
-                            DropdownMenuItem(
-                                value: '${m['id']}',
-                                child: Text(
-                                    '${m['name']} · ${_supplierName(m['supplierId'])} · ${larasRupiah(m['pricePerUnit'] as num)}/${m['unit']}',
-                                    overflow: TextOverflow.ellipsis))
-                        ],
-                        onChanged: (v) => setLocal(() => selected =
-                            _materials.firstWhere((m) => '${m['id']}' == v))),
-                    TextField(
-                        key: const Key('recipe_qty'),
-                        controller: qty,
-                        keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
-                        decoration: _field(
-                            'Pemakaian per 1 produk (${selected['unit']})')),
-                  ]),
+                  content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      spacing: 12,
+                      children: [
+                        DropdownButtonFormField<String>(
+                            key: const Key('recipe_material'),
+                            value: '${selected['id']}',
+                            isExpanded: true,
+                            decoration: _field('Bahan'),
+                            selectedItemBuilder: (_) => [
+                                  for (final m in _materials)
+                                    Text('${m['name']}',
+                                        overflow: TextOverflow.ellipsis)
+                                ],
+                            items: [
+                              for (final m in _materials)
+                                DropdownMenuItem(
+                                    value: '${m['id']}',
+                                    child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text('${m['name']}',
+                                              overflow: TextOverflow.ellipsis),
+                                          Text(
+                                              '${_supplierName(m['supplierId'])} · ${larasRupiah(m['pricePerUnit'] as num)}/${m['unit']}',
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Color(0xFF5F766C))),
+                                        ]))
+                            ],
+                            onChanged: (v) => setLocal(() => selected =
+                                _materials
+                                    .firstWhere((m) => '${m['id']}' == v))),
+                        TextField(
+                            key: const Key('recipe_qty'),
+                            controller: qty,
+                            keyboardType: const TextInputType.numberWithOptions(
+                                decimal: true),
+                            decoration: _field(
+                                'Pemakaian per 1 produk (${selected['unit']})')),
+                      ]),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(c, false),

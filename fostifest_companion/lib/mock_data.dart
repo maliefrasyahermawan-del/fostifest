@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'debt_page.dart' show sampleDebts;
+
 Map<String, dynamic> _line(
         String id, String name, String unit, num qty, int price) =>
     {
@@ -206,6 +208,11 @@ Future<void> _upgradeDemoData(SharedPreferences prefs) async {
     if (!await prefs.setString(key, jsonEncode(value))) {
       throw StateError('Data contoh gagal disimpan.');
     }
+  }
+
+  final debtsRaw = prefs.getString('laras_debts_v1');
+  if (debtsRaw == null || debtsRaw == '[]') {
+    await write('laras_debts_v1', sampleDebts(now));
   }
 
   final newSuppliers = prefs.getString('laras_suppliers_v1') == null;

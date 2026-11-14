@@ -158,10 +158,19 @@ flutter build apk --release --target-platform android-arm64 --obfuscate --split-
 
 ### Preview web lokal
 
-Klik `Buka Preview LARAS.cmd` di folder induk, lalu buka [http://127.0.0.1:43827/](http://127.0.0.1:43827/).
+Klik `Buka Preview LARAS.cmd` di folder induk, lalu buka [http://127.0.0.1:43828/](http://127.0.0.1:43828/).
 
 ## Dokumentasi proyek
 
 - [`DESIGN.md`](DESIGN.md): sistem visual LARAS.
 - [`KONTEKS-LARAS.md`](KONTEKS-LARAS.md): konteks produk dan teknis.
 - [`LARAS_IMPLEMENTATION_REPORT.md`](LARAS_IMPLEMENTATION_REPORT.md): ringkasan implementasi dan batasan.
+
+## Pembaruan terbaru
+
+- **Manajemen Cashflow**: ringkasan uang masuk dan keluar, grafik, tipe arus kas, struktur biaya, pengaruh harga bahan baku, simulasi "bagaimana jika", dan saran.
+- **Utang & Piutang**: catat pesanan yang belum dibayar dan belanja tempo, lengkap dengan jatuh tempo; pembayaran otomatis masuk ke catatan keuangan.
+- **Titik Impas & Dana Cadangan**: omzet minimal agar tidak rugi dan berapa lama usaha bertahan tanpa penjualan.
+- **Tempel Chat**: tempel pesan WhatsApp atau Instagram, LARAS membaca pesanan, lalu kamu verifikasi sebelum disimpan.
+- **AI Insight** di Beranda, **Produk & Stok** yang lebih rapi (cari, filter, ubah stok cepat), dan **Legalitas** dengan 16 izin dan pengingat masa berlaku.
+- **Panduan** dengan kamus istilah keuangan, laporan **PDF** terstruktur dengan insight, pemilih rentang tanggal di Laporan, serta pop-up dan tampilan yang diseragamkan.
